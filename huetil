@@ -1,0 +1,1895 @@
+#!/bin/sh
+#set -x
+#
+# huetil: script for interacting with the philips hue light system
+#       for Asuswrt-merlin routers and Raspberry Pi's
+# 
+# Author: John Grana jgranaroc@gmail.com
+#    based on the hue.sh by Harald van der Laan
+#    with a few other bits from open source
+# version : v1.1.0
+# date    : 12/01/2023
+#
+# inplemented features:
+# - turnin on a hue lightbulb or group
+# - change the saturation of the lightbulb or group
+# - change the brightness of the lightbulb or group
+# - change the hue of a lightbulb or group
+# - change the xy gamut of a lightbulb or group
+# - change the ct temperature of a lightbulb or group
+# - change the color of a light
+# - show lights, groups, scenes or all connected to the Hue Bridge
+# - save and restore attributes of lights or groups.
+# - display information on the hue bridge
+# - display a list of known colors by name (i.e. yellow)
+# - convert a color name to it's x and y values
+#
+# usage: 	huetil command {arguments}
+#
+#
+# Commands:
+#
+# set <light|group> <ID|name> <action {value}> <action {value}>...
+#
+#        action can be:
+#		on or off - turn a light or group on or off
+#		bri - set the brightness level to value
+#		sat - set the saturation level to value
+#		hue - set the hue to value
+#		ct - set color temperature to value
+#		xy - set color based on x and y values (x:y)
+#		color - set the color based on a color name
+#
+#	actions can be all on one line.
+#
+#	lights or groups can be defined by either their ID or by name.
+#
+# show lights:  huetil show <lights|groups|scenes|all>
+#                  will display the name and ID # of the lights, groups or scense
+# show colors:  huetil colors
+#                  display the list of colors (from Gammut C) that huetil knows how to send
+# save/restore: huetil save|restore <light|group|all> <ID or name> {filename}
+#                   save the present settings of a light or group or all; restore a saved setting.
+#                   if no optional filename is given, huetil saves the settings file in the config directory
+#
+# convert    :  huetil convert <color> to x and y values
+#                   convert one of the known colors to their X and Y values
+#
+# info       :  huetil info {bridge}|<light/group> n
+#                    display information about the Hue bridge with "bridge" argument
+#                      or attributes such as state, color, brightness of a light or group
+# help       :  huetil help
+# install    :  huetil install
+# uninstall  :  huetil uninstall
+
+
+# define based on OS
+
+setOS() {
+
+	OSis=$(uname -o)
+
+	case $OSis in
+		ASUSWRT-Merlin)
+			OS="merlin"
+			;;
+		"GNU/Linux")
+			OS="linux"
+			;;
+		*)
+			printf "Your OS reports %s, you need to install huetil on either an Asuswrt-Merlin based router or Raspberry Pi\\n" $OSis
+			printf "Bailing...\\n\\n"
+			exit 1
+	esac
+}
+
+
+# global variables 
+
+
+SCRIPTNAME="huetil"
+SCRIPTVER="1.2.0"
+HUERESPONSE="/tmp/hueresponse"
+HUEHASH="/tmp/huetil.hash"
+
+setOS
+
+if [ "$OS" = "merlin" ] ; then
+	SCRIPTLOC="/jffs/scripts"
+	SCRIPTDIR="/jffs/addons/$SCRIPTNAME"
+	SCRIPTCONF="$SCRIPTDIR/huetil.conf"
+else
+	SCRIPTLOC="/usr/local/sbin/"
+	SCRIPTDIR="/$HOME/.conf/$SCRIPTNAME"
+	SCRIPTCONF="$SCRIPTDIR/huetil.conf"
+fi
+
+Xval=0
+Yval=0
+debug=0
+
+# functions
+
+# help/usage
+
+usage() {
+	echo ""
+	echo "huetil Version $SCRIPTVER"
+	echo ""
+
+	echo " usage: huetil <command> {command arguments}"
+	echo ""
+	echo " set <light|group> <ID|name> <arg value> <arg value>..."
+	echo "   arg can be..."
+	echo "       <on|off>		:  huetil set light|group n <on|off> {color}"
+	echo "        sat		:  huetil set light|group n sat=<0-255>"
+	echo "        bri 		:  huetil set light|group n bri=<0-255>"
+	echo "        hue 		:  huetil set light|group n hue=<0-65535>"
+	echo "        xy		:  huetil set light|group n xy=<0.0-1.0>:<0.0-1.0>"
+	echo "        ct		:  huetil set light|group n ct=<153-500>"
+	echo "                                color temp can also be Cool, Daylight, Natural, Warm or Candle"
+	echo "        color		:  huetil set light|group n color <color>"
+	echo "        trans		:  huetil set light|group n trans <1-300>"
+	echo ""
+	echo "  A light or group (n) can be defined by either their ID or by name."
+	echo ""
+	echo " play <light|group> <arg value>"
+	echo "    arg can be..."
+	echo "       effect             :  huetil play light|group n effect colorloop|none"
+	echo "       breathe            :  huetil play light|group n breathe"
+	echo "       bri-inc            :  huetil play light|group n bri-inc <-255-255>"
+	echo "       hue-inc            :  huetil play light|group n hue-inc <-65534-65535>"
+	echo "       sat-inc            :  huetil play light|group n sat-inc <-255-255>"
+	echo "       ct-inc             :  huetil play light|group n ct-inc <-65534-65535>"
+	echo ""
+	echo "getcolor				:  huetil getcolor light n"
+	echo "info				:  huetil info {bridge}|light|group n"
+	echo "scene				:  huetil scene scenename group"
+	echo ""	
+	echo "save lights/groups settings	:  huetil save <lights|groups|all> n {filename}"
+	echo "restore lights/groups settings	:  huetil restore <lights|groups> n {filename}"
+	echo "show lights/groups/scenes		:  huetil show <lights|groups|scenes|all>"
+	echo "colors - list colors		:  huetil colors"
+	echo "convert - color to xy		:  huetil convert <color>"
+	echo ""
+	echo "help (this screen)		:  huetil help"
+	echo "install				:  huetil install"
+	echo "uninstall				:  huetil uninstall"
+	echo "version				:  huetil version"
+	echo "update				:  huetil update"
+	echo "set bridge username/API		:  huetil sethueun"
+	echo "==============================================================================================="
+	exit 1
+}
+
+# print if verbose is set
+
+hueprint() {
+
+	if [ "$hueVerbose" -eq "1" ]; then  
+		echo "$1"
+	fi
+}
+
+# make sure there is a huetil.conf file and a reasonable IP address and API for the bridge
+
+checkapi() {
+
+	if [ -f "$SCRIPTCONF" ]; then
+		. "$SCRIPTCONF"
+		hueBaseUrl="http://${hueBridge}:${huePort}/api/${hueApiHash}"
+	else
+		echo "[-] huetil: No $SCRIPTCONF found"
+        	echo "[-] huetil: Please run huetil install and try again."
+		exit 1
+	fi
+	if [ "$hueBridge" = "" ]; then
+		echo "[-] huetil: No Hue Bridge IP address. Please edit your hueBridge variable in $SCRIPTCONF"
+		exit 1
+	fi
+	if [ "$hueApiHash" = "" ]; then
+		echo "[-] huetil: Failed to get IDs from API! Please edit your api hash variable in $SCRIPTCONF"
+		exit 1
+	fi
+}
+
+
+checkhueresp() {
+	if [ $(grep -c "error" $HUERESPONSE) -gt 0 ]; then
+		echo -n "[-] huetil: Command failed: "
+	 	echo $(awk 'BEGIN { FS = "\"" }; { print $12 }' $HUERESPONSE)
+		exit 1
+	fi
+}
+
+
+# display the lights or groups or scenes (or all of them) defined on the Hue bridge
+#
+# displays the name and id
+
+showhuestuff() {
+
+	if [ -z "$1" ]; then
+		usage
+		exit 1
+	fi
+	case "$1" in
+		lights)
+			showhuelights show
+			echo ""
+			exit 0 ;;
+		groups)
+			showhuegroups show
+			echo ""
+			exit 0 ;;
+		scenes)
+			echo "Scenes:"
+			echo ""
+			showhuescenes
+			echo ""
+			exit 0 ;;
+		all)
+			showhuelights show
+			echo -n "Next...(press Enter)"
+			read a
+			showhuegroups show
+			echo -n "Next...(press Enter)"
+			read a
+			echo "Scense:"
+			showhuescenes ;;
+		*)
+			usage 
+			exit 1 ;;
+	esac
+}
+			
+
+# the scipts that gets the lights on the bridge - name and ID number
+
+showhuelights() {
+
+	curl -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/lights.json" --request GET ${hueBaseUrl}/lights
+
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send show command."
+		exit 1
+	fi
+
+	cat "$SCRIPTDIR/lights.json" | jq -r 'keys[] as $k | "\(.[$k] | .name)\t\t\($k)"' | sed 's/ /_/g' | column -t > "$SCRIPTDIR/lights"
+	if [ "$1" = "show" ]; then
+		printf "\\nLight Name		Light ID\\n\\n"
+		cat "$SCRIPTDIR/lights"
+	fi
+}
+
+# the scipts that gets the groups on the bridge - name and ID number
+
+showhuegroups() {
+
+	curl -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/groups.json" --request GET ${hueBaseUrl}/groups
+
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send show command."
+		exit 1
+	fi
+
+
+	cat "$SCRIPTDIR/groups.json" | jq -r 'keys[] as $k | "\(.[$k] | .name)\t\t\($k)\t\t\(.[$k] | .lights)"' | sed 's/ /_/g' | tr -d \" | column -t > "$SCRIPTDIR/groups"
+
+	if [ "$1" = "show" ]; then
+		printf "\\nGroup Name		  ID    Lights\\n\\n"
+		cat "$SCRIPTDIR/groups"
+	fi
+}
+
+# the scipts that gets the scenes on the bridge - name and group assigned to
+
+showhuescenes() {
+	
+	checkscenes
+	if [ $(cat $SCRIPTDIR/scenes.group | wc -l ) -gt 1 ]; then
+		echo "Scene              Group"
+		echo "----------------------------------"
+		column -t "$SCRIPTDIR/scenes.group"
+	else
+		echo "No scenes found"
+	fi
+}
+
+# grab information about scenes for use later
+
+checkscenes() {
+
+	somedevices "scenes"
+
+	curl -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/scenes.json" --request GET ${hueBaseUrl}/scenes
+
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send show command"
+		exit 1
+	fi
+
+	if [ $(jq '.' $SCRIPTDIR/scenes.json | wc -l ) -gt 1 ]; then
+		jq '.[] | .name + ":" + .group' "$SCRIPTDIR/scenes.json" | sed 's/ /_/g' | sed 's/:/ /' | sed 's/\"//g' > "$SCRIPTDIR/scenes.group"
+		jq '.[] | .name + ":" + .group' "$SCRIPTDIR/scenes.json" | sed 's/ /_/g' | sed 's/:/ /'  > "$SCRIPTDIR/scenes2.group"
+
+		cat "$SCRIPTDIR/scenes.json" | jq -r 'keys[] as $k | "\($k)\t\(.[$k] | .name)"' | sed "s/ /_/g" > "$SCRIPTDIR/scenes"
+	else
+		echo "No scenes found"
+	fi
+}
+
+# turn on a scene for a group
+# $1 = group # $2 = scene
+
+hueSceneOn() {
+
+	checkscenes
+
+	hueBaseUrl="http://${hueBridge}:${huePort}/api/${hueApiHash}"
+
+	local hueGroup=${2}
+	local hueScene=${1}
+
+        if echo "${hueGroup}" | grep -q "#[0-9]"
+        then
+           echo "[-] huetil: Group # is not a number ${hueGroup}"
+           exit 1
+        fi
+
+
+	hueSceneId=$(grep "$hueScene" "$SCRIPTDIR/scenes" | awk '{print $1}')
+	if [ -z "$hueSceneId" ]; then
+		echo "[-] huetil: ${hueScene} : is not a scene."
+		exit 1
+	fi
+
+
+	hueUrl="${hueBaseUrl}/groups/${hueGroup}/action"
+	
+	hueJsonData="{\"on\":true,\"scene\":\"$hueSceneId\"}"
+
+
+	curl --max-time ${hueTimeOut} --request PUT --data ${hueJsonData} ${hueUrl}
+	
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send scene command to ${hueGroup}/${hueScene}."
+		exit 1
+	fi
+
+	hueprint "[+] huetil: scene sent successfully to ${hueGroup}/${hueScene}."
+}
+
+
+# set the devices brightness level (between 0 and 255)
+
+hueSetBri() {
+
+	if ! echo "$1" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: Brightness value: $1 is not a number."
+                exit 1
+        fi
+
+        if [ $1 -lt 0 ] || [ $1 -gt 255 ]; then
+                echo "[-] huetil: Brightness value must be between 0 and 255."
+                exit 1
+        fi
+
+	jsonData="$jsonData"'"bri": '"$1,"
+
+}
+
+
+# set the devices saturation level (between 0 and 255)
+
+hueSetSat() {
+
+	if ! echo "$1" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: Saturation value: $1 is not a number."
+                exit 1
+        fi
+
+        if [ $1 -lt 0 ] || [ $1 -gt 255 ]; then
+                echo "[-] huetil: Saturation value must be between 0 and 255."
+                exit 1
+        fi
+
+	jsonData="$jsonData"'"sat": '"$1,"
+
+}
+
+# set the hue color of the device (between 0 and 65535)
+
+hueSetHue() {
+
+	
+	if ! echo "$1" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: Hue value: $1 is not a number."
+                exit 1
+        fi
+
+        if [ $1 -lt 0 ] || [ $1 -gt 65535 ]; then
+                echo "[-] huetil: Hue value must be between 0 and 65535."
+                exit 1
+        fi
+
+	jsonData="$jsonData"'"hue": '"$1,"
+
+}
+
+
+# set color temperature of the device - fairly narrow range
+
+hueSetCt() {
+
+	if ! echo "$1" | grep -q "^[0-9]"
+	then
+		case "$1" in
+			Cool|cool)
+				colortemp=153
+				;;
+			Daylight|daylight)
+				colortemp=181
+				;;
+			Natural|natural)
+				colortemp=225
+				;;
+			Warm|warm)
+				colortemp=370
+				;;
+			Candle|candle)
+				colortemp=455
+				;;
+			*)
+                		echo "[-] huetil: $1 is not a number or valid color temp."
+                		exit 1
+				;;
+		esac
+
+	else
+		colortemp=$1
+        fi
+
+
+        if [ $colortemp -lt 153 ] || [ $colortemp -gt 500 ]; then
+                echo "[-] huetil: Ct value must be between 153 and 500."
+                exit 1
+        fi
+
+
+	jsonData="$jsonData"'"ct": '"$colortemp,"
+
+}
+
+
+# set the color of the device based on chromacity coordinates (x and y)
+
+hueSetXY() {
+
+
+if [ "$debug" = "1" ]; then
+        printf "xval: %s  yval: %s\\n" $1 $2
+	read a
+fi
+
+#	somedevices ${hueType}
+
+	if ! echo "$1" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: x $1 is not a number."
+                exit 1
+        fi
+
+	if [ $(echo "$1 != 0"| bc) -eq 0 ] || [ $(echo "$1 > 1.0"|bc) -gt 0 ] ; then
+  		echo "[-] huetil: x must be less than 1 and greater than 0"
+		exit
+	fi
+
+	if ! echo "$2" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: y $1 is not a number."
+                exit 1
+        fi
+	if [ $(echo "$2 != 0" | bc) -eq 0 ] || [ $(echo "$2>1.0"|bc) -gt 0 ] ; then
+  		echo "[-] huetil: y must be less than 1 and greater than 0"
+		exit
+	fi
+
+	jsonData="$jsonData"'"xy":['"$1,$2],"
+}
+
+setTtime() {
+
+	if ! echo "$1" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: Transition time value: $1 is not a number."
+                exit 1
+        fi
+
+        if [ $1 -lt 0 ] || [ $1 -gt 300 ]; then
+                echo "[-] huetil: Transition time must be between 0 and 300."
+                exit 1
+        fi
+
+	nTtime="$1"
+
+}
+
+# cycle through a range of hue values, time between changes based on .conf CycleDelay
+
+hueCycle() {
+	local hueType=${1}
+        local hueTypeNumber=${2}
+        local hueState1=${3}
+	local hueState2=${4}
+
+	somedevices ${hueType}
+	
+	if ! echo "${hueTypeNumber}" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: ${hueType} number: ${hueTypeNumber} is not a number."
+                exit 1
+        fi
+
+        case ${hueType} in
+                light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}/state" ;;
+                group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}/action" ;;
+                *) echo "[-] huetil: The cycle device mode is not light or group."; exit 1 ;;
+        esac
+
+	if ! echo "${hueState1}" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: Cycle value1: ${hueState1} is not a number."
+                exit 1
+        fi
+	
+	if ! echo "${hueState2}" | grep -q "^[0-9]"
+	then
+                echo "[-] huetil: Cycle value2: ${hueState2} is not a number."
+                exit 1
+        fi
+	
+	if [ ${hueState1} -lt 0 ] || [ ${hueState1} -gt 65535 ]; then
+		echo "[-] huetil: Cycle value1 must be between 0 and 65535."
+		exit 1
+	fi
+	
+	if [ ${hueState2} -lt 0 ] || [ ${hueState2} -gt 65535 ]; then
+                echo "[-] huetil: Cycle value2 must be between 0 and 65535."
+                exit 1
+        fi
+	
+	if [ ${hueState1} -ge ${hueState2} ]; then
+		echo "[-] huetil: Cycle value1 must be smaller then cycle value2."
+		exit 1
+	fi
+	
+	curl --max-time ${hueTimeOut} --silent --request PUT --data '{"on":true,"bri":254,"hue":54000,"sat":255}' ${hueUrl} &> /dev/null
+	
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send reset command to ${hueType}/${hueTypeNumber}."
+	fi
+	
+	lcount=${hueState1}
+	while [ "$lcount" -lt "$hueState2" ]; do
+		curl --max-time ${hueTimeOut} --silent --request PUT --data '{"hue":'${lcount}',"transitiontime":'${Ttime}'}' ${hueUrl} &> /dev/null
+		if [ ${?} -ne 0 ]; then
+			echo "[-] huetil: Failed to send cycle command to ${hueType}/${hueTypeNumber}, Hue is: ${hueValue}."
+		else
+			hueprint "[ ] Hue: Cycle command successfully send to ${hueType}/${hueTypeNumber}, Hue is: ${hueValue}."
+		fi
+
+		if [ $hueCycleDelay -eq 0 ]; then
+			usleep 250000
+		else
+			sleep $hueCycleDelay
+		fi
+		lcount="$((lcount + hueCycleStep))"
+	done
+}
+
+# given a .json formated file ($1), return the value of the key ($2)
+
+
+pullarg() {
+	cat "$1" | sed /{/d | sed /}/d | sed 's/,//' | sed 's/"//g' | sed '/effect/d' | awk 'BEGIN { FS = ":" }; { print $1 $2 }' | grep -m 1 "$2" | awk '{ print $2 }'
+}
+
+# retrieve attributes like brightness, hue, color etc of all the lights and groups and store for future restoring
+# saved files are in SCRIPTCONF/saved
+
+hueSaveAll() {
+
+	if [ $(huenumdevice light) -gt 0 ]; then
+		echo "Saving all lights present state..."
+		showhuelights
+		cat /dev/null > /tmp/litelist
+		while IFS='' read -r light; do
+			lit=$(echo $light | awk '{print $2}')
+			echo -n "$lit " >> /tmp/litelist
+		done < "$SCRIPTDIR/lights"
+		for i in $(cat /tmp/litelist); do
+			hueattr "light" "$i" "save"
+		done
+	fi
+
+	if [ $(huenumdevice group) -gt 0 ]; then
+		echo "Saving all groups present state..."
+		showhuegroups
+		echo
+		while read line; do
+			lit=$(echo $line | awk '{print $2}')
+			hueattr "group" $lit "save"
+		done < "$SCRIPTDIR/groups"
+	fi
+	echo
+	rm -f /tmp/lites
+	echo "Done."
+}
+
+
+# routine to manipulate the various attributes of the device
+# 
+
+
+hueattr() {
+	hueType=${1}
+	hueTypeNumber=${2}
+	hueCmnd=${3}
+	hueFileName=${4}
+
+	if [ "${hueType}" = "all" ]; then
+		hueSaveAll
+		exit
+	fi
+
+	if [ "${hueTypeNumber}" = "info" ] && [ "${hueType}" = "bridge" ]; then
+		gethueconfig
+		exit
+	fi
+
+	if ! echo "$hueTypeNumber" | grep -q "^[0-9]"
+	then
+		huenum=$(name2num "$hueType" "$hueTypeNumber")
+		hueTypeNumber=$huenum
+	fi
+
+	devexist $hueType $hueTypeNumber
+
+
+	if [ "${hueCmnd}" = "restore" ]; then
+		case ${hueType} in
+			light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}/state" ;;
+			group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}/action" ;;
+			*) echo "[-] huetil: The hue device not a light."; exit 1 ;;
+		esac
+	else
+		case ${hueType} in
+			light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}" ;;
+			group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}" ;;
+			*) echo "[-] huetil: The hue device not a light."; exit 1 ;;
+		esac
+	fi
+
+if [ "$debug" -eq 1 ]; then
+	echo ${hueUrl}
+	read a
+fi
+
+
+	case "${hueCmnd}" in
+		color)
+			curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.state.xy' > $HUERESPONSE
+			if [ ${?} -ne 0 ]; then
+				echo "[-] huetil: Failed to send command to bridge"
+				exit 1
+			fi
+			checkhueresp
+		;;
+		info)
+			curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.' > $HUERESPONSE
+			if [ ${?} -ne 0 ]; then
+				echo "[-] huetil: Failed to send command to bridge"
+				exit 1
+			fi
+			checkhueresp
+		;;
+		save)
+			case $hueType in
+					light)
+						curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.state' > $HUERESPONSE
+						if [ ${?} -ne 0 ]; then
+							echo "[-] huetil: Failed to send command to bridge"
+							exit 1
+						fi
+						checkhueresp
+					;;
+					group)
+						curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.action' > $HUERESPONSE
+						if [ ${?} -ne 0 ]; then
+							echo "[-] huetil: Failed to send command to bridge"
+							exit 1
+						fi
+						checkhueresp
+					;;
+					*)
+						echo "huetil: save what? light or group or all"
+						exit
+					;;
+			esac
+
+			for i in on colormode effect alert reachable
+			do
+  				sed -i "/$i/d" $HUERESPONSE
+			done
+			if [ "$hueFileName" = "" ]; then
+				savename="$SCRIPTDIR/saved/${hueType}_${hueTypeNumber}.state"
+			else
+				savename="$hueFileName"
+			fi
+
+			cat $HUERESPONSE | tr -d '\n' | sed 's/,}/}/g' > $savename
+		;;
+		restore)
+			if [ "$hueFileName" = "" ]; then
+				savename="$SCRIPTDIR/saved/${hueType}_${hueTypeNumber}.state"
+			else
+				savename="$hueFileName"
+			fi
+			if [ ! -f "$savename" ]; then
+				echo "[-] huetil: Saved state file $savename doesn't exist"
+				echo "[-] huetil: Save it using: huetil save $hueType $hueTypeNumber"
+				exit 1
+			fi
+			if [ "${hueType}" = "light" ]; then
+				hueUrlcheck="${hueBaseUrl}/lights/${hueTypeNumber}"
+				if [ "$(curl --max-time ${hueTimeOut} --silent --request GET ${hueUrlcheck} | jq -r '.state.on')" = "false" ]; then
+					echo "[-] huetil: Restoreing light ${hueTypeNumber} requires the light to be on"
+					echo "[-] huetil: Turn the light on (huetil light $hueTypeNumber turn on)"
+					exit 1
+				fi
+			fi
+
+			hueJsonData="$(cat $savename)"
+	
+			curl --max-time ${hueTimeOut} --silent --request PUT --data "${hueJsonData}" "${hueUrl}" > $HUERESPONSE
+			if [ ${?} -ne 0 ]; then
+				echo "[-] huetil: Failed to send command to bridge."
+				exit 1
+			fi
+			checkhueresp
+			exit 0
+		;;
+	esac
+	
+	if [ "${hueCmnd}" = "color" ]; then
+		X=$(sed -n '2p' $HUERESPONSE | tr -d ',') 
+		Y=$( sed -n '3p' $HUERESPONSE)
+		printf "X=$X  Y=$Y\\n" 
+	elif [ "${hueCmnd}" = "info" ]; then
+		hname=$(pullarg $HUERESPONSE "name")
+		hbri=$(pullarg $HUERESPONSE "bri")
+		hhue=$(pullarg $HUERESPONSE "hue")
+		hsat=$(pullarg $HUERESPONSE "sat")
+		hct=$(pullarg $HUERESPONSE "ct")
+		cmode=$(pullarg $HUERESPONSE "colormode")
+		if [ "$hueType" = "light" ]; then
+			lstate=$(pullarg $HUERESPONSE "on")
+			htype="Light"
+		else
+			lstate=$(pullarg $HUERESPONSE "all_on")
+			htype="Group"
+		
+		fi
+	
+		if [ "$lstate" = "true" ]; then
+			ison="on"
+		else
+			ison="off"
+		fi
+		printf "%s %s (%s) is %s. Brightness: %s  Hue: %s  Saturation: %s  Color Temp: %s  Color Mode: %s\\n" $hueType $hueTypeNumber $hname $ison $hbri $hhue $hsat $hct $cmode
+
+		if [ "$hueType" = "group" ]; then
+			printf "Lights in Group $hname: "
+			for i in $(grep -w "$hname\s" "$SCRIPTDIR/groups" | awk '{print $3}' | tr -d '\[' | tr -d '\]' | sed 's/,/ /g')
+			do
+				lit=$(num2name light $i)
+				printf " $lit ($i),"
+			done
+			printf "\\b \\n"
+		fi
+			
+	fi
+}
+
+# query and return for the number of defined lights, groups or scenses defined on the bridge
+
+huenumdevice() {
+
+	case "$1" in
+		light) hueUrl="${hueBaseUrl}/lights" ;;
+		group) hueUrl="${hueBaseUrl}/groups" ;;
+		scenes) hueUrl="${hueBaseUrl}/scenes" ;;
+		*) echo "[-] huetil: The hue device mode is not lights, groups or scenes."; exit 1 ;;
+	esac
+
+	curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.[].name' > $HUERESPONSE
+
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send command to bridge."
+		exit 1
+	fi
+	checkhueresp
+
+	numdev=$(wc -l $HUERESPONSE | awk '{print $1}')
+
+	echo $numdev
+}
+
+# show all the lights, groups and scenes the bride knows about
+
+hueshowdevices() {
+
+	for i in light group scenes; do
+		echo $i
+		numd=$(huenumdevice $i)
+		printf "Number of %s: %s\\n" $i $numd
+	done
+}
+		
+# set variable numdev to the number of devics known by the bridge
+# exit if none defined
+
+somedevices() {
+
+	numdev=$(huenumdevice "$1")
+
+	if [ $numdev -gt 0 ]; then
+		return
+	else
+		printf "Hue Bridge reports no $1...\\n"
+		exit
+	fi
+}
+
+
+tstmode() {
+
+	hueType=${1}
+	hueTypeNumber=${2}
+	hueState=${3}
+
+#	if ! echo "${hueTypeNumber}" | grep -q "^[0-9]"
+#	then
+#		echo "[-] huetil: ${hueType} number: ${hueTypeNumber} is not a number."
+#		exit 1
+#	fi
+
+	case ${hueType} in
+#		light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}/state" ;;
+		lights) hueUrl="${hueBaseUrl}/lights" ;;
+#		group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}/action" ;;
+		groups) hueUrl="${hueBaseUrl}/groups" ;;
+		scenes) hueUrl="${hueBaseUrl}/scenes" ;;
+#		*) echo "[-] huetil: The hue device mode is not lights, groups or scenes."; exit 1 ;;
+	esac
+
+	case ${hueState} in
+		on) hueJsonData="{\"effect\":\"colorloop\"}" ;;
+		off) hueJsonData="{\"effect\":\"none\"}" ;;
+		restore) hueJsonData="$(cat $SCRIPTDIR/saved/${hueType}_${hueTypeNumber}.state)" ;;
+#		*) echo "[-] huetil: The hue device effect can only be turned on or off."; exit 1 ;;
+	esac
+
+if [ "$debug" -eq 1 ]; then
+	echo ${hueUrl}
+	echo ${hueJsonData}
+	echo ${hueColor}
+	read a
+fi
+
+	curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.[]' > $HUERESPONSE
+	
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send command to bridge."
+		exit 1
+	fi
+	checkhueresp
+
+cat $HUERESPONSE
+}
+
+# turn a scene on for a group
+# $1 = group # $2 = scene
+
+hueSceneOn() {
+	
+	checkscenes
+
+	hueBaseUrl="http://${hueBridge}:${huePort}/api/${hueApiHash}"
+
+	hueGroup=${2}
+	hueScene=${1}
+
+        if ! echo "${hueGroup}" | grep -q "#[0-9]"
+	then
+		huenum=$(name2num "group" "$hueGroup")
+		hueGroup=$huenum
+	fi
+
+	hueSceneId=$(grep "$hueScene" "$SCRIPTDIR/scenes" | awk '{print $1}')
+	if [ -z "$hueSceneId" ]; then
+		echo "[-] huetil: ${hueScene} : is not a scene."
+		exit 1
+	fi
+
+
+	hueUrl="${hueBaseUrl}/groups/${hueGroup}/action"
+	
+	hueJsonData="{\"on\":true,\"scene\":\"$hueSceneId\"}"
+
+
+	curl --max-time ${hueTimeOut} --request PUT --data ${hueJsonData} ${hueUrl}
+	
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send scene command to ${hueGroup}/${hueScene}."
+		exit 1
+	fi
+
+	hueprint "[+] huetil: scene sent successfully to ${hueGroup}/${hueScene}."
+}
+
+
+
+# hue_color
+# snippet from:
+#     https://raw.githubusercontent.com/Josef-Friedrich/Hue-shell/master/base.sh
+# Convert color strings to hue values.
+#	$1: COLOR_NAME
+# to show x y values:
+#       $1: show    $2 COLOR_NAME
+# internal $1: convert   $2 COLOR_NAME
+#     populate Xval and Yval
+#
+# Always uses Gamut C - most common
+#
+
+hue_color() {
+
+SHOWXY=0
+
+if [ "$1" = "show" ]; then
+	SHOWXY=1
+	lookcolor="$2"
+elif [ "$1" = "convert" ]; then
+	SHOWXY=2
+   	lookcolor="$2"
+else
+	lookcolor="$1"
+fi
+
+# Gamut C (most typical)
+	case "$lookcolor" in
+		start-color-list) ;;
+			alice-blue) COLOR='-x 0.3088 -y 0.3212' ;;
+			antique-white) COLOR='-x 0.3548 -y 0.3489' ;;
+			aqua) COLOR='-x 0.1607 -y 0.3423' ;;
+			aquamarine) COLOR='-x 0.2138 -y 0.4051' ;;
+			azure) COLOR='-x 0.3059 -y 0.3303' ;;
+			beige) COLOR='-x 0.3402 -y 0.356' ;;
+			bisque) COLOR='-x 0.3806 -y 0.3576' ;;
+			black) COLOR='-x 0.153 -y 0.048' ;;
+			blanched-almond) COLOR='-x 0.3695 -y 0.3584' ;;
+			blue) COLOR='-x 0.153 -y 0.048' ;;
+			blue-violet) COLOR='-x 0.251 -y 0.1056' ;;
+			brown) COLOR='-x 0.6399 -y 0.3041' ;;
+			burlywood) COLOR='-x 0.4236 -y 0.3811' ;;
+			cadet-blue) COLOR='-x 0.2211 -y 0.3328' ;;
+			chartreuse) COLOR='-x 0.2505 -y 0.6395' ;;
+			chocolate) COLOR='-x 0.6009 -y 0.3684' ;;
+			coral) COLOR='-x 0.5763 -y 0.3486' ;;
+			cornflower) COLOR='-x 0.1905 -y 0.1945' ;;
+			cornsilk) COLOR='-x 0.3511 -y 0.3574' ;;
+			crimson) COLOR='-x 0.6508 -y 0.2881' ;;
+			cyan) COLOR='-x 0.1607 -y 0.3423' ;;
+			d65) COLOR='-x 0.3127 -y 0.3290' ;;
+			dark-blue) COLOR='-x 0.153 -y 0.048' ;;
+			dark-cyan) COLOR='-x 0.1607 -y 0.3423' ;;
+			dark-goldenrod) COLOR='-x 0.5214 -y 0.4361' ;;
+			dark-gray) COLOR='-x 0.3227 -y 0.329' ;;
+			dark-green) COLOR='-x 0.17 -y 0.7' ;;
+			dark-khaki) COLOR='-x 0.4004 -y 0.4331' ;;
+			dark-magenta) COLOR='-x 0.3833 -y 0.1591' ;;
+			dark-olive-green) COLOR='-x 0.3475 -y 0.5047' ;;
+			dark-orange) COLOR='-x 0.5921 -y 0.3831' ;;
+			dark-orchid) COLOR='-x 0.2986 -y 0.1341' ;;
+			dark-red) COLOR='-x 0.692 -y 0.308' ;;
+			dark-salmon) COLOR='-x 0.4837 -y 0.3479' ;;
+			dark-sea-green) COLOR='-x 0.2924 -y 0.4134' ;;
+			dark-slate-blue) COLOR='-x 0.2206 -y 0.1484' ;;
+			dark-slate-gray) COLOR='-x 0.2239 -y 0.3368' ;;
+			dark-turquoise) COLOR='-x 0.1605 -y 0.3366' ;;
+			dark-violet) COLOR='-x 0.2824 -y 0.1104' ;;
+			deep-pink) COLOR='-x 0.5445 -y 0.2369' ;;
+			deep-sky-blue) COLOR='-x 0.158 -y 0.2379' ;;
+			dim-gray) COLOR='-x 0.3227 -y 0.329' ;;
+			dodger-blue) COLOR='-x 0.1559 -y 0.1599' ;;
+			firebrick) COLOR='-x 0.6621 -y 0.3023' ;;
+			floral-white) COLOR='-x 0.3361 -y 0.3388' ;;
+			forest-green) COLOR='-x 0.1984 -y 0.6746' ;;
+			fuchsia) COLOR='-x 0.3833 -y 0.1591' ;;
+			gainsboro) COLOR='-x 0.3227 -y 0.329' ;;
+			ghost-white) COLOR='-x 0.3174 -y 0.3207' ;;
+			gold) COLOR='-x 0.4871 -y 0.4618' ;;
+			goldenrod) COLOR='-x 0.5125 -y 0.4428' ;;
+			gray) COLOR='-x 0.3227 -y 0.329' ;;
+			web-gray) COLOR='-x 0.3227 -y 0.329' ;;
+			green) COLOR='-x 0.17 -y 0.7' ;;
+			web-green) COLOR='-x 0.17 -y 0.7' ;;
+			green-yellow) COLOR='-x 0.3221 -y 0.5857' ;;
+			honeydew) COLOR='-x 0.316 -y 0.3477' ;;
+			hot-pink) COLOR='-x 0.4682 -y 0.2452' ;;
+			indian-red) COLOR='-x 0.5488 -y 0.3112' ;;
+			indigo) COLOR='-x 0.2428 -y 0.0913' ;;
+			ivory) COLOR='-x 0.3334 -y 0.3455' ;;
+			judd) COLOR='-x 0.3067 -y 0.3108' ;;
+			khaki) COLOR='-x 0.4019 -y 0.4261' ;;
+			lavender) COLOR='-x 0.3085 -y 0.3071' ;;
+			lavender-blush) COLOR='-x 0.3369 -y 0.3225' ;;
+			lawn-green) COLOR='-x 0.2485 -y 0.641' ;;
+			lemon-chiffon) COLOR='-x 0.3608 -y 0.3756' ;;
+			light-blue) COLOR='-x 0.2621 -y 0.3157' ;;
+			light-coral) COLOR='-x 0.5075 -y 0.3145' ;;
+			light-cyan) COLOR='-x 0.2901 -y 0.3316' ;;
+			light-goldenrod) COLOR='-x 0.3504 -y 0.3717' ;;
+			light-gray) COLOR='-x 0.3227 -y 0.329' ;;
+			light-green) COLOR='-x 0.2648 -y 0.4901' ;;
+			light-pink) COLOR='-x 0.4112 -y 0.3091' ;;
+			light-salmon) COLOR='-x 0.5016 -y 0.3531' ;;
+			light-sea-green) COLOR='-x 0.1611 -y 0.3593' ;;
+			light-sky-blue) COLOR='-x 0.214 -y 0.2749' ;;
+			light-slate-gray) COLOR='-x 0.2738 -y 0.297' ;;
+			light-steel-blue) COLOR='-x 0.276 -y 0.2975' ;;
+			light-yellow) COLOR='-x 0.3436 -y 0.3612' ;;
+			lime) COLOR='-x 0.17 -y 0.7' ;;
+			lime-green) COLOR='-x 0.1972 -y 0.6781' ;;
+			linen) COLOR='-x 0.3411 -y 0.3387' ;;
+			magenta) COLOR='-x 0.3833 -y 0.1591' ;;
+			maroon) COLOR='-x 0.5383 -y 0.2566' ;;
+			web-maroon) COLOR='-x 0.692 -y 0.308' ;;
+			medium-aquamarine) COLOR='-x 0.215 -y 0.4014' ;;
+			medium-blue) COLOR='-x 0.153 -y 0.048' ;;
+			medium-orchid) COLOR='-x 0.3365 -y 0.1735' ;;
+			medium-purple) COLOR='-x 0.263 -y 0.1773' ;;
+			medium-sea-green) COLOR='-x 0.1979 -y 0.5005' ;;
+			medium-slate-blue) COLOR='-x 0.2179 -y 0.1424' ;;
+			medium-spring-green) COLOR='-x 0.1655 -y 0.5275' ;;
+			medium-turquoise) COLOR='-x 0.176 -y 0.3496' ;;
+			medium-violet-red) COLOR='-x 0.5047 -y 0.2177' ;;
+			midnight-blue) COLOR='-x 0.1616 -y 0.0802' ;;
+			mint-cream) COLOR='-x 0.315 -y 0.3363' ;;
+			misty-rose) COLOR='-x 0.3581 -y 0.3284' ;;
+			moccasin) COLOR='-x 0.3927 -y 0.3732' ;;
+			navajo-white) COLOR='-x 0.4027 -y 0.3757' ;;
+			navy-blue) COLOR='-x 0.153 -y 0.048' ;;
+			old-lace) COLOR='-x 0.3421 -y 0.344' ;;
+			olive) COLOR='-x 0.4334 -y 0.5022' ;;
+			olive-drab) COLOR='-x 0.354 -y 0.5561' ;;
+			orange) COLOR='-x 0.5569 -y 0.4095' ;;
+			orange-red) COLOR='-x 0.6731 -y 0.3222' ;;
+			orchid) COLOR='-x 0.3688 -y 0.2095' ;;
+			pale-goldenrod) COLOR='-x 0.3751 -y 0.3983' ;;
+			pale-green) COLOR='-x 0.2675 -y 0.4826' ;;
+			pale-turquoise) COLOR='-x 0.2539 -y 0.3344' ;;
+			pale-violet-red) COLOR='-x 0.4658 -y 0.2773' ;;
+			papaya-whip) COLOR='-x 0.3591 -y 0.3536' ;;
+			peach-puff) COLOR='-x 0.3953 -y 0.3564' ;;
+			peru) COLOR='-x 0.5305 -y 0.3911' ;;
+			pink) COLOR='-x 0.3944 -y 0.3093' ;;
+			plum) COLOR='-x 0.3495 -y 0.2545' ;;
+			powder-blue) COLOR='-x 0.262 -y 0.3269' ;;
+			purple) COLOR='-x 0.2725 -y 0.1096' ;;
+			web-purple) COLOR='-x 0.3833 -y 0.1591' ;;
+			rebecca-purple) COLOR='-x 0.2703 -y 0.1398' ;;
+			red) COLOR='-x 0.692 -y 0.308' ;;
+			rosy-brown) COLOR='-x 0.4026 -y 0.3227' ;;
+			royal-blue) COLOR='-x 0.1649 -y 0.1338' ;;
+			saddle-brown) COLOR='-x 0.5993 -y 0.369' ;;
+			salmon) COLOR='-x 0.5346 -y 0.3247' ;;
+			sandy-brown) COLOR='-x 0.5104 -y 0.3826' ;;
+			sea-green) COLOR='-x 0.1968 -y 0.5047' ;;
+			seashell) COLOR='-x 0.3397 -y 0.3353' ;;
+			sienna) COLOR='-x 0.5714 -y 0.3559' ;;
+			silver) COLOR='-x 0.3227 -y 0.329' ;;
+			sky-blue) COLOR='-x 0.2206 -y 0.2948' ;;
+			slate-blue) COLOR='-x 0.2218 -y 0.1444' ;;
+			slate-gray) COLOR='-x 0.2762 -y 0.3009' ;;
+			snow) COLOR='-x 0.3292 -y 0.3285' ;;
+			spring-green) COLOR='-x 0.1671 -y 0.5906' ;;
+			steel-blue) COLOR='-x 0.183 -y 0.2325' ;;
+			tan) COLOR='-x 0.4035 -y 0.3772' ;;
+			teal) COLOR='-x 0.1607 -y 0.3423' ;;
+			thistle) COLOR='-x 0.3342 -y 0.2971' ;;
+			tomato) COLOR='-x 0.6112 -y 0.3261' ;;
+			turquoise) COLOR='-x 0.1702 -y 0.3675' ;;
+			violet) COLOR='-x 0.3644 -y 0.2133' ;;
+			wheat) COLOR='-x 0.3852 -y 0.3737' ;;
+			white) COLOR='-x 0.3227 -y 0.329' ;;
+			white-smoke) COLOR='-x 0.3227 -y 0.329' ;;
+			yellow) COLOR='-x 0.4334 -y 0.5022' ;;
+			yellow-green) COLOR='-x 0.3517 -y 0.5618' ;;
+		end-color-list) ;;
+		*) COLOR='Error' ;;
+	esac
+
+	if [ "$SHOWXY" = "1" ]; then
+		echo -n "$lookcolor (xy): "
+		echo "$COLOR"
+	elif [ "$COLOR" = "Error" ]; then
+		echo "huetil: $lookcolor not in known list of colors"
+	elif [ "$SHOWXY" = "2" ]; then
+			Xval=$(echo "$COLOR" | awk '{print $2}')
+			Yval=$(echo "$COLOR" | awk '{print $4}')
+	else
+		echo "$COLOR" | sed 's/-x //' | sed 's/-y //'
+	fi
+}
+
+# gethue_user - get a hue bridge username
+#       reqires user to press the link button on top of the hue
+#       very experimental - might not work in all cases.
+#    
+
+
+gethue_user() {
+	if [ -f "$SCRIPTCONF" ]; then
+		. "$SCRIPTCONF"
+	else
+		echo "[-] huetil: No $SCRIPTCONF found"
+        	echo "[-] huetil: Please run huetil install and try again."
+	exit 1
+	fi
+
+	hueBaseUrl="http://${hueBridge}:${huePort}"
+	hueUrl="${hueBaseUrl}/api" 
+	hueJsonData='{"devicetype":"huetil#admin"}'
+
+	cat <<EOF
+
+Attempting to get a hashed username from your hue bridge. This
+will require you to press the round link button on top of the hub.
+If you can't do this right now, you will need to create a hue
+developers account and create a username there.
+Once you press the link button, you will have no more than 25-30 seconds
+to contniue
+
+EOF
+	echo -n "Do you want to proceed? Press Y to proceed any other key to exit? "
+	read a
+	if [ "$a" = "Y" ] || [ "$a" = "y" ]; then
+		echo
+		echo
+		echo -n "Press the link button - then press enter..."
+		read a
+		echo
+		curl --max-time ${hueTimeOut} --silent --request POST --data ${hueJsonData} ${hueUrl} > $HUEHASH
+		if [ ${?} -ne 0 ]; then
+			echo "[-] huetil: Failed to send scene command to hue bridge."
+			exit 1
+		fi
+
+		if [ $(grep -c 'error' $HUEHASH) -gt 0 ]; then
+			if [ $(grep -c 'button' $HUEHASH) -gt 0 ]; then
+				echo
+				echo "Hue Bridge reported that the Link button wasnt pressed"
+				sleep 1
+				showhowun
+				rm -f $HUEHASH
+				exit 1
+			else
+				echo "Hue Bridge responded with an unexpected error:"
+				cat $HUEHASH
+				showhowun
+				rm -f $HUEHASH
+				exit 1
+			fi
+		else
+
+			huekey=$(cat $HUEHASH | awk 'BEGIN { FS = "\"" } ; {print $6};')
+			echo "Success hue username key is $huekey"
+			echo
+			sleep 2
+			sed -i '/hueApiHash/d' $SCRIPTCONF
+			echo "#hueApiHash generated during install - shouldn't have to change!" >> $SCRIPTCONF
+			echo "hueApiHash=\"$huekey\"" >> $SCRIPTCONF
+			echo
+			echo "Updated $SCRIPTCONF:"
+			echo
+			sleep 2
+			echo "Here is the present huetil.conf file:"
+			echo
+			cat $SCRIPTCONF
+			echo
+			sleep 2
+			echo "Install done."
+
+		fi
+	else
+		showhowun
+	fi
+rm -f $HUEHASH
+}
+
+# get the hue bridge configuration info and display
+
+gethueconfig() {
+	if [ -f "$SCRIPTCONF" ]; then
+		. "$SCRIPTCONF"
+	else
+		echo "[-] huetil: No $SCRIPTCONF found"
+        	echo "[-] huetil: Please run huetil install and try again."
+	exit 1
+	fi
+
+	hueBaseUrl="http://${hueBridge}:${huePort}"
+	hueUrl="${hueBaseUrl}/api/${hueApiHash}/config" 
+	curl --max-time ${hueTimeOut} --request GET ${hueUrl} > $SCRIPTDIR/hueconfig
+
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send command to bridge."
+		exit 1
+	fi
+
+	if [ -z "$SCRIPTDIR/hueconfig" ]; then
+		echo "[-] huetil: Failed to get configuration from bridge."
+		exit 1
+	fi
+	
+ 
+	jq -C '.' $SCRIPTDIR/hueconfig | more
+}
+
+
+showhowun() {
+		cat <<EOF
+
+You can try again by running huetil with this argument:
+  huetil gethueun
+
+If that fails again... You will need to create one manually at:
+
+        https://developers.meethue.com/develop/get-started-2/
+
+Setting up a developers account is required and free (and easy).
+
+Once you get the username, copy it and insert it into the $SCRIPTCONF file:
+hueApiHash=xxxxxxxxxxxxxxxxx
+
+EOF
+}
+
+# based on OS, install other apps huetil needs
+
+installdepends() {
+
+	if [ "$OS" = "merlin" ]; then
+        	if [ ! -x /opt/bin/opkg ]; then
+        	        printf "\\nhuetil requires Entware to be installed\\n"
+                	printf "\\nInstall Entware using amtm and run huetil install\\n"
+                	exit 1
+        	else
+			echo "Checking for and installing required apps"
+			entwareup=0
+                	for app in jq column; do
+                        	if [ ! -x /opt/bin/$app ]; then
+					if [ "$entwareup" = "0" ]; then
+                				opkg update
+						entwareup=1
+					fi
+                                	echo "Installing $app to /opt/bin"
+                               		opkg install $app
+                        	fi
+                	done
+        	fi
+	else
+		echo "Checking for and installing required apps"
+		aptupd=0
+                for app in jq arp-scan; do
+			if [ ! $(which $app) ]; then
+				if [ "$aptupd" = "0" ]; then
+                			sudo apt-get update
+					aptupd=1
+				fi
+                        echo "Installing $app"
+                        sudo apt-get install -y $app
+			fi
+                done
+	fi
+}
+
+# query that the hue bridge is at the passed IP address
+
+checkhueip() {
+
+		hueUrl="http://"$1":80/api/0/config"
+		rm -f /tmp/huetmp
+		HueBridgeName=""
+		curl -S --max-time 10 --silent -o "/tmp/huetmp" --request GET "$hueUrl"
+		if [ -z /tmp/huetmp ]; then
+			"[-] huetil: Error - could not retrieve data from Hue $1"
+			return false
+		fi
+		HueBridgeName=$(jq -r '.[]' /tmp/huetmp | head -1)
+		return true
+}
+
+# install scrpipt - sets up directories, conf file, etc.
+# OS supported are Asuswrt-Merlin and Raspbian (and possible other GNU/Linux
+
+install_hue() {
+	echo "Creating script directory $SCRIPTDIR"
+        mkdir -p "$SCRIPTDIR"
+        mkdir -p "$SCRIPTDIR/saved"
+
+	installdepends
+
+	if [ "$OS" = "merlin" ]; then
+		echo "Installing $SCRIPTNAME in /opt/sbin"
+        	if [ -d "/opt/sbin" ] && [ ! -L "/opt/sbin/$SCRIPTNAME" ]; then
+                	ln -s "$SCRIPTLOC/$SCRIPTNAME" "/opt/sbin/$SCRIPTNAME"
+               		chmod 0755 "/opt/sbin/$SCRIPTNAME"
+        	fi
+	else
+		echo "Installing $SCRIPTNAME in $SCRIPTLOC"
+		if [ ! -f "$HOME/$SCRIPTNAME" ]; then
+			sudo cp "./$SCRIPTNAME" "$SCRIPTLOC/$SCRIPTNAME"
+		else
+			sudo cp "$HOME/$SCRIPTNAME" "$SCRIPTLOC/$SCRIPTNAME"
+		fi
+        	sudo chmod 0755 "$SCRIPTLOC/$SCRIPTNAME"
+	fi
+
+	echo "Creating conf file"
+        echo "# huetil settings  " > "$SCRIPTCONF"
+	echo "# IP Address of hue bridge" >> "$SCRIPTCONF"
+	echo -n "Scanning local network for a Hue Bridge..."
+	if [ "$OS" = "merlin" ]; then
+		hubip=$(arp -n | grep "00:17:88" | grep -oP '(?<=[(])[^)]*')
+	else
+		hubip=$(sudo arp-scan -l --retry 4 --bandwidth 64K --ouifile=/usr/share/arp-scan/ieee-oui.txt --macfile=/etc/arp-scan/mac-vendor.txt | \
+        grep "Philips Lighting" | awk '{print $1}')
+	fi
+	echo "done."
+
+	if [ ! -z $hubip ]; then
+		checkhueip $hubip
+		if [ "$HueBridgeName" != "" ]; then
+			printf "Found a Hue Bridge at %s (%s)\\n" $hubip "$HueBridgeName"
+			echo "hueBridge='${hubip}'" >> "$SCRIPTCONF"
+		fi
+	else
+		echo "Couldnt find hue bridge on the network."
+		echo "You will need to find it and add it to ${SCRIPTDIR}/huetil.conf under hueBridge"
+		echo "hueBridge=''" >> "$SCRIPTCONF"
+	fi
+	echo "# IP Port number of bridge - usually 80" >> "$SCRIPTCONF"
+	echo "huePort='80'" >> "$SCRIPTCONF"
+	echo "# Print all messages (1) or just errors (0)" >> "$SCRIPTCONF"
+	echo "hueVerbose='0'" >> "$SCRIPTCONF"
+	echo "# How many steps between cycles in cycle command"
+	echo "hueCycleStep='500'" >> "$SCRIPTCONF"  
+	echo "# Time is seconds to delay when cycling"
+	echo "hueCycleDelay='1'" >> "$SCRIPTCONF"
+	echo "# Transition time for actions - in 100mSec. overrides default 400mSec" >> "$SCRIPTCONF"
+	echo "Ttime='1'" >> "$SCRIPTCONF"
+	echo "# Amount of time in seconds to wait for Hue Bridge to respond to commands"
+        echo "hueTimeOut='7'" >> "$SCRIPTCONF"
+        echo "# ApiHash is required. " >> "$SCRIPTCONF"
+        echo "# If this field is empty, create an account and get and api key from: " >> "$SCRIPTCONF"
+        echo "#    https://developers.meethue.com/login/ " >> "$SCRIPTCONF"
+        echo "# then insert the key below " >> "$SCRIPTCONF"
+	echo "hueApiHash=''" >> "$SCRIPTCONF"
+
+# attempt to see about a username/key
+
+	if [ ! -z $hubip ]; then
+		gethue_user
+	else
+		echo "No valid Hue Bridge found - no username/key generated"
+		echo "Find the Hue Bridge local IP address and update $SCRIPTCONF"
+		exit 1
+	fi
+
+}
+
+# uninstall script - remove all the stuff we installed (except dependent apps like nmap)
+
+remove_hue() {
+	printf "\\n Uninstall huetil and it's data/directories? [Y=Yes] ";read -r continue
+	case "$continue" in
+		Y|y) printf "\\n Uninstalling...\\n"
+		   rm -rf "$SCRIPTDIR"
+		   if [ "$OS" = "merlin" ]; then
+                   	rm -f /jffs/scripts/huetil
+                   	if [ -L /opt/sbin/huetil ]; then
+				rm -f /opt/sbin/huetil
+		   	fi
+		   else
+                   	rm -rf "$SCRIPTCONF"
+                   	sudo rm -f "$SCRIPTLOC/$SCRIPTNAME"
+		   fi
+
+		   printf "\\nhuetil uninstalled\\n"
+		;;
+		*) printf "\\nhuetil NOT uninstalled\\n"
+		;;
+	esac
+}
+
+
+updatehuetil() {
+	if [ -x "$SCRIPTLOC/$SCRIPTNAME" ] && [ -f "$SCRIPTCONF" ]; then
+		printf "\\nDownload and install the latest version of huetil (Y/N)? "
+		read a
+		if [ "$a" = "n" ] || [ "$a" = "N" ]; then
+			exit
+		else
+			oldwas=$(grep -m 1 "SCRIPTVER=" /jffs/scripts/huetil)
+			printf "\\nOk, downloading huetil again\\n"
+			/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil" -o "/jffs/scripts/huetil" && chmod 0755 /jffs/scripts/huetil
+			printf "\\n\\nDone.\\n"
+			newis=$(grep -m 1 "SCRIPTVER=" /jffs/scripts/huetil)
+			printf "Old version was %s, new version us %s\\n" $oldwas $newis
+			
+		fi
+	else
+		printf "\\nNo $SCRIPTLOC/$SCRIPTNAME or $SCRIPTCONF found"
+		printf "\\nDownload and install manually"
+	fi
+}
+
+# given the name of a light or group (as shown by show lights|groups) return it ID
+
+name2num() {
+
+	case $1 in
+		light)
+			huedev=lights
+		;;
+		group)
+			huedev=groups
+		;;
+		*)
+			echo "[-] huetil: not a light or group - $1"
+			exit
+		;;
+	esac
+
+	
+	numis=$(grep -w "$2\s" "$SCRIPTDIR/$huedev" | awk '{print $2}')
+
+	if [ -z "$numis" ]; then
+		echo "[-] huetil: $1 $2 not found on Hue Bridge"
+		exit
+	else
+		echo $numis
+	fi
+
+}
+
+# given the ID of a light or group (as shown by show lights|groups) return its name
+
+num2name() {
+
+	case $1 in
+		light)
+			huedev=lights
+			numis=$(grep -w "\s$2$" "$SCRIPTDIR/$huedev" | awk '{print $1}')
+		;;
+		group)
+			huedev=groups
+			numis=$(grep -w "$2\s" "$SCRIPTDIR/$huedev" | awk '{print $1}')
+		;;
+		*)
+			echo "[-] huetil: not a light or group - $1"
+			exit
+		;;
+	esac
+
+	if [ -z "$numis" ]; then
+		echo "[-] huetil: $1 $2 not found on Hue Bridge"
+		exit
+	else
+		echo $numis
+	fi
+
+}
+
+# main parseing routine
+
+parsem() {
+shift
+i=1;
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+		on)
+			jsonData='{"on":true,'
+		 ;;
+		off)
+			jsonData='{"on":false,'
+		;;
+		bri)
+			hueSetBri $2; shift
+           	;;
+		sat)
+	    		hueSetSat $2; shift
+           	;;
+		hue)
+	   		hueSetHue $2; shift
+	   	;;
+		ct) 
+	    		hueSetCt $2; shift
+	   	;;
+		xy)
+    			xval=$(echo $2 | awk 'BEGIN { FS = ":" }; { print $1 }' | sed 's/xy://')
+    			yval=$(echo $2 | awk 'BEGIN { FS = ":" }; { print $2 }')
+if [ "$debug" = "1" ]; then
+	    		printf "X: %s Y: %s\\n" $xval $yval
+			read a
+fi
+		        hueSetXY $xval $yval
+			shift
+	   	;;
+		color)
+			hue_color convert $2
+			hueSetXY "$Xval" "$Yval"; shift
+		;;
+		trans)
+			setTtime $2
+			shift
+		;;
+		*)
+	   		echo "Invalid argument $1"
+	   		exit
+           	;;
+    	esac
+#        hue) target="$2"; printf "cmd %s arg %s\\n" $1 $2; shift ;;
+    shift
+done
+}
+
+# given a device type and ID, is it known by the bridge
+
+devexist() {
+
+	case "$1" in
+		light)
+			showhuelights > /dev/null
+                        if [ -z $(awk '{print $2}' "$SCRIPTDIR/lights" | grep -x "$2") ]; then
+				echo "Light $2 is not known to the hue bridge"
+				exit
+			else
+				return
+			fi
+			;;
+		group)
+			showhuegroups
+			if [ -z $(awk '{print $2}' "$SCRIPTDIR/groups" | grep -x "$2") ]; then
+				echo "Group $2 is not known to the hue bridge"
+				exit
+			else
+				return
+			fi
+			;;
+		*)
+			echo "huetil: $1 not a light or group..."
+			exit
+			;;
+esac
+}
+
+# script that does the playful actions
+
+doeffects() {
+
+	somedevices "$1"
+	
+	if ! echo "$2" | grep -q "^[0-9]"
+	then
+		huenum=$(name2num "$1" "$2")
+	else
+		huenum="$2"
+        fi
+	case "$1" in
+		light)
+			devexist $1 $huenum
+			hueUrl="${hueBaseUrl}/lights/$huenum/state"
+			jsonData='{"on":true,'
+			;;
+		group)
+			devexist $1 $huenum
+			hueUrl="${hueBaseUrl}/groups/$huenum/action"
+			jsonData='{"on":true,'
+			;;
+		*)
+			echo "Error cant set device $1 $2"
+			exit
+			;;
+	esac
+
+	case "$3" in
+		effect)
+			if [ "$4" = "colorloop" ] || [ "$4" = "none" ]; then
+				jsonData="$jsonData\"effect\":\"$4\"}"
+			else
+				echo "huetil: effect must be either colorloop or none"
+				exit
+			fi
+		;;
+		breathe)
+				jsonData="$jsonData\"alert\":\"$4\"}"
+		;;
+		bri-inc)
+			if [ $4 -lt -255 ] || [ $4 -gt 255 ]; then
+				echo "huetil: bri-inc ($4)  must be between -255 and 255"
+				exit
+			else
+				jsonData="{\"bri_inc\": $4}"
+			fi
+		;;
+
+		hue-inc)
+			if [ $4 -lt -65534 ] || [ $4 -gt 65534 ]; then
+				echo "huetil: hue-inc ($4)  must be between -65534 and 65534"
+				exit
+			else
+				jsonData="{\"hue_inc\": $4}"
+			fi
+		;;
+
+		sat-inc)
+			if [ $4 -lt -255 ] || [ $4 -gt 255 ]; then
+				echo "huetil: sat-inc ($4)  must be between -255 and 255"
+				exit
+			else
+				jsonData="{\"sat_inc\": $4}"
+			fi
+		;;
+		ct-inc)
+			if [ $4 -lt -65534 ] || [ $4 -gt 65535 ]; then
+				echo "huetil: bri-inc ($4)  must be between -65534 and 65535"
+				exit
+			else
+				jsonData="{\"ct_inc\": $4}"
+			fi
+		;;
+		*)
+			echo "unknown effect $3"
+			exit
+		;;
+	esac
+
+	curl --max-time ${hueTimeOut} --silent --request PUT --data "$jsonData" ${hueUrl} > $HUERESPONSE
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send command to bridge."
+		exit 1
+	fi
+	checkhueresp
+
+}
+
+# script the takes the collected set command args and sends it to the bridge
+
+setstuff() {
+
+#	printf "setstuff 1: %s  2: %s\\n" $2 $3
+
+	somedevices "$2"
+	
+	if ! echo "$3" | grep -q "^[0-9]"
+	then
+		huenum=$(name2num "$2" "$3")
+	else
+		huenum="$3"
+        fi
+
+# always set transitioin to default before action
+
+	nTtime=$Ttime
+
+	case "$2" in
+		light)
+			devexist $2 $huenum
+			hueUrl="${hueBaseUrl}/lights/$huenum/state"
+			jsonData='{"on":true,'
+			shift
+			shift
+			parsem "$@"
+			;;
+		group)
+			devexist $2 $huenum
+			hueUrl="${hueBaseUrl}/groups/$huenum/action"
+			jsonData='{"on":true,'
+			shift
+			shift
+			parsem "$@"
+			;;
+		*)
+			echo "Error cant set device $2"
+			exit
+			;;
+	esac
+
+# work around bug with bridge when turning devices off.
+# adding transition time will cause light/group brightness to go to 1
+#
+
+	if [ $( echo $jsonData | grep \"on\":false) ]; then
+		jsonData='{"on":false}'
+	else
+		jsonData="$jsonData"'"transitiontime":'"$nTtime}"
+	fi
+
+debug=0
+
+if [ "$debug" = "1" ] ; then
+	printf "hueUrl: %s\\n" "$hueUrl"
+	printf "jsonData: %s\\n" "$jsonData"
+	read a
+fi
+
+
+	curl --max-time ${hueTimeOut} --silent --request PUT --data "$jsonData" ${hueUrl} > $HUERESPONSE
+
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send set command to $1/$2."
+		exit 1
+	fi
+	checkhueresp
+}
+
+
+# main script
+
+if [ ${#} -eq 0 ]; then
+	usage
+	exit 0
+fi
+
+setOS
+
+if [ "$1" = "install" ]; then
+	install_hue
+	exit
+fi
+
+checkapi
+
+if [ -z $(which jq) ]; then
+	echo "[-] huetil: jq is not installed. This script needs curl to communicate with the hue api."
+        echo "[-] huetil: Please run huetil install and try again."
+        exit 1
+fi
+
+if [ -f "$SCRIPTCONF" ]; then
+	. "$SCRIPTCONF"
+	hueBaseUrl="http://${hueBridge}:${huePort}/api/${hueApiHash}"
+else
+	echo "[-] huetil: No $SCRIPTCONF found"
+        echo "[-] huetil: Please run huetil install and try again."
+	exit 1
+fi
+
+hueDeviceAction=${1}
+hueDevice=${2}
+hueDeviceNumber=${3}
+hueDeviceActionValue1=${4}
+hueDeviceActionValue2=${5}
+
+
+case ${hueDeviceAction} in
+
+		cycle) hueCycle ${hueDevice} ${hueDeviceNumber} ${hueDeviceActionValue1} ${hueDeviceActionValue2}
+		 ;;
+		install)
+			install_hue
+			exit 0
+		;;
+		uninstall)
+			remove_hue
+			exit 0
+		;;
+		version)
+			echo $SCRIPTVER
+			exit 0
+		;;
+		show)
+			showhuestuff $hueDevice
+			exit 0
+		;;
+		colors)
+			printf "Availble colors for hue:\\n\\n"
+			sed -n '/alice-blue)/,/yellow-green)/p;/yellow-green)/q' "$SCRIPTLOC/$SCRIPTNAME" | awk 'BEGIN { FS = ")" } ; { print $1 }' | tr -s '\t' ' ' | column -x
+			printf "\\n\\nAvailable color temps (ct):\\n\\n"
+			echo "    Cool Daylight Natural Warm Candle"
+			echo
+			exit 0
+		;;
+		convert)
+			hue_color $hueDevice
+			exit 0
+		;;
+		scene)
+			hueSceneOn $hueDevice $hueDeviceNumber
+		;;
+		sethueun)
+			gethue_user
+			exit 0
+		;;
+		info)
+			hueattr $hueDevice $hueDeviceNumber "info"
+			exit 0
+		;;
+		getcolor)
+			hueattr $hueDevice $hueDeviceNumber "color"
+			exit 0
+		;;
+		save)
+			hueattr $hueDevice $hueDeviceNumber "save" $hueDeviceActionValue1
+			exit 0
+		;;
+		saveall)
+			hueattr "all"
+			exit 0
+		;;
+		restore)
+			hueattr $hueDevice $hueDeviceNumber "restore" $hueDeviceActionValue1
+			exit 0
+		;;
+		verbose)
+			if [ "$hueVerbose" -eq "0" ]; then
+				sed -i "s/hueVerbose='0'/hueVerbose='1'/" $SCRIPTCONF
+			else
+				sed -i "s/hueVerbose='1'/hueVerbose='0'/" $SCRIPTCONF
+			fi
+			exit 0
+		;;
+		hubconfig)
+			gethueconfig
+			exit 0
+		;;
+		update)
+			updatehuetil
+			exit 0
+		;;
+		help)
+			usage
+			exit 0
+		;;
+# testmode - hidden command to expriment with differnt things
+		testmode)
+			somedevices "light"
+			printf "There are %i lights\\n" $numdev
+			somedevices "group"
+			printf "There are %i groups\\n" $numdev
+			somedevices "scenes"
+			printf "There are %i scenes\\n" $numdev
+			hueshowdevices
+			exit 0
+		;;
+	set)
+	   setstuff "$@" 
+	;;
+	play)
+	   doeffects ${hueDevice} ${hueDeviceNumber} ${hueDeviceActionValue1} ${hueDeviceActionValue2}
+	;;
+
+	*)
+	   echo "huetil: Unknown command ${hueDeviceAction}"
+	    usage ;;
+esac
+
+exit 0
