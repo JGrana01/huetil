@@ -233,7 +233,8 @@ To turn off the scene, you just need to turn off the group. For example:
 **$ huetil set group 2 off**
 
 ## Command and Arguments
-**set (light or group) (ID or name) _arguments_**
+
+### **set (light or group) (ID or name) _arguments_**
 The **set** command changes the state of a light or group. State can include off/on, the color, hue, brightness, color temperature, saturation, etc.
 Arguments:
 
@@ -256,6 +257,24 @@ _color_ - set the color to one in the Gamut C range (issue **$ huetil colors**) 
 _xy_ - set the color based on the CIE X and Y values +/-<0.0 - 1.0>
 
 _trans_ - The duration of the transition from the light’s current state to the new state. This is given as a multiple of 100ms and defaults to 4 (400ms).
+
+### *play (light|group (ID or Name) (effect) _argument_*
+
+The *play* command does various dynamic effects on the light or group.
+
+Arguments:
+
+_effect (colorloop or none)_ - Setting the effect to _colorloop_ will cycle through all hues using the current brightness and saturation settings. Setting it to _none_ stops the cycling.
+
+_breathe {long}_ - the _breathe_ argument will cause the light or group to do one cycle to a lower brightness then back up. The optional argument _long_ does this cycling for 15 seconds.
+
+_bri-inc_ - Increments or decrements the value of the brightness. <-254 to 254>
+
+_sat-inc_ - Increments or decrements the value of saturation. <-254 to 254>
+
+_hue-inc_ - Increments or decrements the value of hue. <-65534 to 65534>
+
+_ct-inc_ - Increments or decrements the value of color temperature (ct). <-65534 to 65534>
 
 
 There are also a set of utilty commands.
