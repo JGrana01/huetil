@@ -1,5 +1,5 @@
 # huetil
-Linux based script to provide tools to manage a Hue Brige and it's devices
+Linux based script to provide tools to manage a Hue Bridge and it's devices
 
 ## Installation
 huetil can be installed on GNU/Linux and Asuswrt-Merlin routers.
