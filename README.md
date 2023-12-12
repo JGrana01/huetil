@@ -232,7 +232,7 @@ To turn off the scene, you just need to turn off the group. For example:
 
 **$ huetil set group 2 off**
 
-## Command and Arguments
+## Commands
 
 ### **set (light or group) (ID or name) _arguments_**
 The **set** command changes the state of a light or group. State can include off/on, the color, hue, brightness, color temperature, saturation, etc.
@@ -254,7 +254,7 @@ _ct_ - sets the Mired color temperature <153-500>
         
 _color_ - set the color to one in the Gamut C range (issue **$ huetil colors**) to see the list of known colors available
 
-_xy_ - set the color based on the CIE X and Y values +/-<0.0 - 1.0>
+_xy_ - set the color based on the CIE X and Y values. The two values need to be seperated by a colin (:) i.e. 0.312:0.423   +/-<0.0 - 1.0>
 
 _trans_ - The duration of the transition from the light’s current state to the new state. This is given as a multiple of 100ms and defaults to 4 (400ms).
 
@@ -335,25 +335,99 @@ The _scene_ command turns on a pre-defined scene to a group of lights.
 
 To turn the scene off, issue the _set off_ command to the group of lights.
 
+### **show (lights|groups|scenes|all)**
+The _show_ command is used to "show" the lights, groups and scenes that the Hue Bridge has control over. It will display both the name and the ID. This command is useful to obtain the ID or proper Name of the item.
 
+_show_ will display the name and ID of the lights, groups and/or scenes. It can also show detailed information about the Hue Bridge.
 
+_show lights or groups or scenes_ will display the list of lights, groups or scenes known to the Hue Bridge
 
+_show all_ will display all lights, groups and scenes
 
+_show bridge_ 
 
+### **info (light or group) (ID or name) {bridge}**
 
+_Info_ will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group.
 
+With the argument _bridge_ it will display the full configuration informaion from the Hue Bridge. It is displayed in json format and piped through more (there is lots of detail).
 
+i.e.
+_info light Living_Room_Shelf_
 
-
-
-
-
-
-There are also a set of utilty commands.
 ```
--show - shows lights, groups and scenes as known by the Hue Bridge
--colors - show the list of colors available for the Hue devices
--convert - convert a color to it's gammut x y  coordinates
--hubconfig - retrieve and display the Hue hub internal configuration (in json format). Useful for debugging.
+light 2 (Living) is off. Brightness: 70  Hue: 48628  Saturation: 206  Color Temp: 153  Color Mode: xy
+```
+
+### **getcolor (light) (ID or name)**
+
+The command _getcolor_ will return the x and y coordinates of a color in CIE color space of the light. This, combined with the _set xy_ command can be useful to fine tune the color of a light.
+
+i.e.
+_getcolor light 5_
+
+```
+X=  0.4583  Y=  0.4099
+```
+### **colors**
+
+_Colors_ will display a list of the color names that huetil uses. It is a list in the Gamut C space.
+
+_colors_
+```
+Availble colors for hue:
+
+ alice-blue              antique-white           aqua                    aquamarine              azure                   beige
+ bisque                  black                   blanched-almond         blue                    blue-violet             brown
+ burlywood               cadet-blue              chartreuse              chocolate               coral                   cornflower
+ cornsilk                crimson                 cyan                    d65                     dark-blue               dark-cyan
+ dark-goldenrod          dark-gray               dark-green              dark-khaki              dark-magenta            dark-olive-green
+ dark-orange             dark-orchid             dark-red                dark-salmon             dark-sea-green          dark-slate-blue
+ dark-slate-gray         dark-turquoise          dark-violet             deep-pink               deep-sky-blue           dim-gray
+ dodger-blue             firebrick               floral-white            forest-green            fuchsia                 gainsboro
+ ghost-white             gold                    goldenrod               gray                    web-gray                green
+ web-green               green-yellow            honeydew                hot-pink                indian-red              indigo
+ ivory                   judd                    khaki                   lavender                lavender-blush          lawn-green
+ lemon-chiffon           light-blue              light-coral             light-cyan              light-goldenrod         light-gray
+ light-green             light-pink              light-salmon            light-sea-green         light-sky-blue          light-slate-gray
+ light-steel-blue        light-yellow            lime                    lime-green              linen                   magenta
+ maroon                  web-maroon              medium-aquamarine       medium-blue             medium-orchid           medium-purple
+ medium-sea-green        medium-slate-blue       medium-spring-green     medium-turquoise        medium-violet-red       midnight-blue
+ mint-cream              misty-rose              moccasin                navajo-white            navy-blue               old-lace
+ olive                   olive-drab              orange                  orange-red              orchid                  pale-goldenrod
+ pale-green              pale-turquoise          pale-violet-red         papaya-whip             peach-puff              peru
+ pink                    plum                    powder-blue             purple                  web-purple              rebecca-purple
+ red                     rosy-brown              royal-blue              saddle-brown            salmon                  sandy-brown
+ sea-green               seashell                sienna                  silver                  sky-blue                slate-blue
+ slate-gray              snow                    spring-green            steel-blue              tan                     teal
+ thistle                 tomato                  turquoise               violet                  wheat                   white
+ white-smoke             yellow                  yellow-green
+
+
+Available color temps (ct):
+
+    Cool Daylight Natural Warm Candle
+```
+### **convert (color)**
+_Convert_ takes one of the known colors huetil supports and return the CIE X and Y values. Again, useful for fine tuning colors.
+
+i.e.
+_convert violet_
+```
+0.3644 0.2133
+```
+
+## There are also a set of utilty commands.
+```
+help - display a help screen
+
+version - display huetils version
+
+install - install huetil based on the operating system
+
+uninstall - remove huetil and it's conf directory
+
+huesetun - attempt to generate an API key by pressing the link (center) button on the Hue Bridge
+
 ```
 
