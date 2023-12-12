@@ -258,7 +258,7 @@ _xy_ - set the color based on the CIE X and Y values +/-<0.0 - 1.0>
 
 _trans_ - The duration of the transition from the light’s current state to the new state. This is given as a multiple of 100ms and defaults to 4 (400ms).
 
-### *play (light|group (ID or Name) (effect) _argument_*
+### **play (light|group (ID or Name) (effect) _argument_**
 
 The *play* command does various dynamic effects on the light or group.
 
@@ -276,15 +276,15 @@ _hue-inc_ - Increments or decrements the value of hue. <-65534 to 65534>
 
 _ct-inc_ - Increments or decrements the value of color temperature (ct). <-65534 to 65534>
 
-### *save and restore*
+### **save and restore**
 
 The _save_ and _restore_ commands provide an easy way to "snapshot" the present settings of a light or group. The settings it saves are:
 
 _brightness (bri), hue, saturation (sat), xy and color temperature (ct)_
 
-Using theses commands, you can try different settings but always get back to a known setting (the saved one). 
-It is recommended to save the lights and groups as a baseline - the way they normally are.
-Both save and restore can operate on on light/group. Save can save all lights and groups. Again, this should be done soon after _huetil_ is installed.
+Using these commands, you can try different settings but always get back to a known setting (the saved one). 
+It is recommended to save the lights and groups as a baseline using the _save all_ command - the way they normally are.
+Both save and restore can operate on lights/groups. Save can _save all_ lights and groups it finds on the Hue Bridge. Again, this should be done soon after _huetil_ is installed.
 
 ***save***
 
@@ -292,7 +292,7 @@ For saving all the lights and groups settings:
 
 **huetil save all**
 
-huetul will scan for all lights and groups and save the settings in it's conf/saved directory. For Asuswrt-melin this would be /jffs/addons/huetil/saved.
+huetul will scan for all lights and groups and save the settings in it's conf/saved directory. For Asuswrt-Merlin this would be /jffs/addons/huetil/saved.
 For Linux it would be $HOME/.conf/huetil/saved.
 
 Each light and group are stored with their name and a ".state" extension. For example
@@ -311,13 +311,13 @@ You can also save the state of one light or group:
 
 **huetil save (light|group) (ID or name)**
 
-This will save the present settings of the light or group (and overwrite the file in ~huetil/saved).
+This will save the present settings of the light or group. Without the optional _filename_ argument it will save the settings in the ~huetil/saved_ directory (and overwrite the file in ~huetil/saved).
 
-You can also save the settings by adding a _filename_ to the end of the save command:
+You can also save the settings to a differnt file by adding a _filename_ to the end of the save command:
 
 **huetil save (light|group) (ID|name) filename**
 
-This is useful for scripts or trying different attributes for the light/group. This will save the settings into the _filename_ given.
+This is useful for scripts or trying different attributes for the light/group or in a dynamic scripts to _save_ the settings before actions then to _restore_ on the scripts exit.
 
 ***restore***
 
@@ -329,6 +329,16 @@ Without a _filename_ argument, huetil will use the saved settings in the ~huetil
 This is useful after a session of tuning the lights or to transfer the settins (using the _filename_ argument) from one light to another.
 
 _restore_ does not support a "restore all", unlike save.
+
+### **scene (scenename) (group name or ID)**
+The _scene_ command turns on a pre-defined scene to a group of lights.
+
+To turn the scene off, issue the _set off_ command to the group of lights.
+
+
+
+
+
 
 
 
