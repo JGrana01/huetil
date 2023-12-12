@@ -114,7 +114,7 @@ Many of the commands require what device (light or group) the light or group ID#
 
 For example, the command
 
-**mhue show lights**
+**huetil show lights**
 
 might produce a list like this:
 
@@ -152,7 +152,7 @@ BTW, for a list of valid colors, issue this command:
 
 Groups of lights are done the same (along with what Lights are in the Group). Each group has a Group ID and name. Again, to see the groups, ID and related Lights issue this command:
 
-**$ mhue show groups**
+**$ huetil show groups**
 
 An example of output is:
 
@@ -275,6 +275,68 @@ _sat-inc_ - Increments or decrements the value of saturation. <-254 to 254>
 _hue-inc_ - Increments or decrements the value of hue. <-65534 to 65534>
 
 _ct-inc_ - Increments or decrements the value of color temperature (ct). <-65534 to 65534>
+
+### *save and restore*
+
+The _save_ and _restore_ commands provide an easy way to "snapshot" the present settings of a light or group. The settings it saves are:
+
+_brightness (bri), hue, saturation (sat), xy and color temperature (ct)_
+
+Using theses commands, you can try different settings but always get back to a known setting (the saved one). 
+It is recommended to save the lights and groups as a baseline - the way they normally are.
+Both save and restore can operate on on light/group. Save can save all lights and groups. Again, this should be done soon after _huetil_ is installed.
+
+***save***
+
+For saving all the lights and groups settings:
+
+**huetil save all**
+
+huetul will scan for all lights and groups and save the settings in it's conf/saved directory. For Asuswrt-melin this would be /jffs/addons/huetil/saved.
+For Linux it would be $HOME/.conf/huetil/saved.
+
+Each light and group are stored with their name and a ".state" extension. For example
+
+**huetil save all**
+```
+group_1.state               group_203.state             group_82.state              light_16.state              light_6.state
+group_10.state              group_3.state               group_83.state              light_17.state              light_7.state
+group_11.state              group_5.state               group_84.state              light_18.state              light_8.state
+group_2.state               group_6.state               group_9.state               light_19.state              light_Island_Light_2.state
+group_200.state             group_7.state               light_1.state               light_2.state
+group_201.state             group_8.state               light_10.state              light_3.state
+group_202.state             group_81.state              light_14.state              light_5.state
+```
+You can also save the state of one light or group:
+
+**huetil save (light|group) (ID or name)**
+
+This will save the present settings of the light or group (and overwrite the file in ~huetil/saved).
+
+You can also save the settings by adding a _filename_ to the end of the save command:
+
+**huetil save (light|group) (ID|name) filename**
+
+This is useful for scripts or trying different attributes for the light/group. This will save the settings into the _filename_ given.
+
+***restore***
+
+_restore_ takes a previously saved state file and "restore" the light or group back to that state.
+
+**huetil restore (light|group) {filename}**
+
+Without a _filename_ argument, huetil will use the saved settings in the ~huetil/saved directory. With a _filename_ it will use the information from that file.
+This is useful after a session of tuning the lights or to transfer the settins (using the _filename_ argument) from one light to another.
+
+_restore_ does not support a "restore all", unlike save.
+
+
+
+
+
+
+
+
 
 
 There are also a set of utilty commands.
