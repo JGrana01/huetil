@@ -12,7 +12,7 @@ For Asuswrt-Merlin based routers:
 
 For GNU/Linux (i.e. Raspberry Pi)
 
-/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil" -o "$HOME/huetil" && chmod 0755 $HOME/huetil && $HOME/huetil install
+/usr/bin/curl --retry 3 "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil" -o "$HOME/huetil" && chmod 0755 $HOME/huetil && $HOME/huetil install
 
 ## About
 huetil is a utility that provides a number of commands to manipulate lights, groups and scenes on a Philips Hue Bridge.
