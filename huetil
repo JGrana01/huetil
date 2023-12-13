@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.0"
+SCRIPTVER="1.2.1"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 
@@ -122,11 +122,11 @@ usage() {
 	echo " set <light|group> <ID|name> <arg value> <arg value>..."
 	echo "   arg can be..."
 	echo "       <on|off>		:  huetil set light|group n <on|off> {color}"
-	echo "        sat		:  huetil set light|group n sat=<0-255>"
-	echo "        bri 		:  huetil set light|group n bri=<0-255>"
-	echo "        hue 		:  huetil set light|group n hue=<0-65535>"
-	echo "        xy		:  huetil set light|group n xy=<0.0-1.0>:<0.0-1.0>"
-	echo "        ct		:  huetil set light|group n ct=<153-500>"
+	echo "        sat		:  huetil set light|group n sat <0-255>"
+	echo "        bri 		:  huetil set light|group n bri <0-255>"
+	echo "        hue 		:  huetil set light|group n hue <0-65535>"
+	echo "        xy		:  huetil set light|group n xy <0.0-1.0>:<0.0-1.0>"
+	echo "        ct		:  huetil set light|group n ct <153-500>"
 	echo "                                color temp can also be Cool, Daylight, Natural, Warm or Candle"
 	echo "        color		:  huetil set light|group n color <color>"
 	echo "        trans		:  huetil set light|group n trans <1-300>"
@@ -136,7 +136,7 @@ usage() {
 	echo " play <light|group> <arg value>"
 	echo "    arg can be..."
 	echo "       effect             :  huetil play light|group n effect colorloop|none"
-	echo "       breathe            :  huetil play light|group n breathe"
+	echo "       breathe            :  huetil play light|group n breathe {long}"
 	echo "       bri-inc            :  huetil play light|group n bri-inc <-255-255>"
 	echo "       hue-inc            :  huetil play light|group n hue-inc <-65534-65535>"
 	echo "       sat-inc            :  huetil play light|group n sat-inc <-255-255>"
@@ -287,10 +287,10 @@ showhuegroups() {
 showhuescenes() {
 	
 	checkscenes
-	if [ $(cat $SCRIPTDIR/scenes.group | wc -l ) -gt 1 ]; then
+	if [ $(cat $SCRIPTDIR/scenes| wc -l ) -gt 1 ]; then
 		echo "Scene              Group"
 		echo "----------------------------------"
-		column -t "$SCRIPTDIR/scenes.group"
+		cat "$SCRIPTDIR/scenes" | awk '{print $1"\t" $2}' | column -t
 	else
 		echo "No scenes found"
 	fi
@@ -309,11 +309,13 @@ checkscenes() {
 		exit 1
 	fi
 
-	if [ $(jq '.' $SCRIPTDIR/scenes.json | wc -l ) -gt 1 ]; then
-		jq '.[] | .name + ":" + .group' "$SCRIPTDIR/scenes.json" | sed 's/ /_/g' | sed 's/:/ /' | sed 's/\"//g' > "$SCRIPTDIR/scenes.group"
-		jq '.[] | .name + ":" + .group' "$SCRIPTDIR/scenes.json" | sed 's/ /_/g' | sed 's/:/ /'  > "$SCRIPTDIR/scenes2.group"
+	if [ -z "$SCRIPTDIR/scenes.json" ]; then
+		echo "huetil: no scenes detected"
+		exit
+	fi
 
-		cat "$SCRIPTDIR/scenes.json" | jq -r 'keys[] as $k | "\($k)\t\(.[$k] | .name)"' | sed "s/ /_/g" > "$SCRIPTDIR/scenes"
+	if [ $(jq '.' $SCRIPTDIR/scenes.json | wc -l ) -gt 1 ]; then
+		cat "$SCRIPTDIR/scenes.json" | jq -r 'keys[] as $k | "\($k)\t\(.[$k] | .name + "\t" + .group )"' | sed "s/ /_/g" | awk '{if ($3) print $2"\t"$3"\t"$1;}' | column -t > "$SCRIPTDIR/scenes"
 	else
 		echo "No scenes found"
 	fi
@@ -331,31 +333,34 @@ hueSceneOn() {
 	local hueGroup=${2}
 	local hueScene=${1}
 
-        if echo "${hueGroup}" | grep -q "#[0-9]"
-        then
-           echo "[-] huetil: Group # is not a number ${hueGroup}"
-           exit 1
+	if ! echo "$hueGroup" | grep -q "^[0-9]"
+	then
+		huenum=$(name2num "group" "$hueGroup")
+	else
+		huenum="$hueGroup"
         fi
 
 
-	hueSceneId=$(grep "$hueScene" "$SCRIPTDIR/scenes" | awk '{print $1}')
+	hueSceneId=$(cat "$SCRIPTDIR/scenes" | grep "$huenum" | grep "$hueScene" | awk '{ print $3}') 
+
 	if [ -z "$hueSceneId" ]; then
 		echo "[-] huetil: ${hueScene} : is not a scene."
 		exit 1
 	fi
 
 
-	hueUrl="${hueBaseUrl}/groups/${hueGroup}/action"
+	hueUrl="${hueBaseUrl}/groups/${huenum}/action"
 	
 	hueJsonData="{\"on\":true,\"scene\":\"$hueSceneId\"}"
 
+	curl --max-time ${hueTimeOut} --silent --request PUT --data ${hueJsonData} ${hueUrl} > $HUERESPONSE
 
-	curl --max-time ${hueTimeOut} --request PUT --data ${hueJsonData} ${hueUrl}
-	
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send scene command to ${hueGroup}/${hueScene}."
 		exit 1
 	fi
+
+	checkhueresp
 
 	hueprint "[+] huetil: scene sent successfully to ${hueGroup}/${hueScene}."
 }
@@ -682,6 +687,10 @@ fi
 
 	case "${hueCmnd}" in
 		color)
+			if [ ! "${hueType}" = "light" ]; then
+				echo "huetil: getcolor only works with lights"
+				exit
+			fi
 			curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.state.xy' > $HUERESPONSE
 			if [ ${?} -ne 0 ]; then
 				echo "[-] huetil: Failed to send command to bridge"
@@ -901,47 +910,6 @@ fi
 
 cat $HUERESPONSE
 }
-
-# turn a scene on for a group
-# $1 = group # $2 = scene
-
-hueSceneOn() {
-	
-	checkscenes
-
-	hueBaseUrl="http://${hueBridge}:${huePort}/api/${hueApiHash}"
-
-	hueGroup=${2}
-	hueScene=${1}
-
-        if ! echo "${hueGroup}" | grep -q "#[0-9]"
-	then
-		huenum=$(name2num "group" "$hueGroup")
-		hueGroup=$huenum
-	fi
-
-	hueSceneId=$(grep "$hueScene" "$SCRIPTDIR/scenes" | awk '{print $1}')
-	if [ -z "$hueSceneId" ]; then
-		echo "[-] huetil: ${hueScene} : is not a scene."
-		exit 1
-	fi
-
-
-	hueUrl="${hueBaseUrl}/groups/${hueGroup}/action"
-	
-	hueJsonData="{\"on\":true,\"scene\":\"$hueSceneId\"}"
-
-
-	curl --max-time ${hueTimeOut} --request PUT --data ${hueJsonData} ${hueUrl}
-	
-	if [ ${?} -ne 0 ]; then
-		echo "[-] huetil: Failed to send scene command to ${hueGroup}/${hueScene}."
-		exit 1
-	fi
-
-	hueprint "[+] huetil: scene sent successfully to ${hueGroup}/${hueScene}."
-}
-
 
 
 # hue_color
@@ -1595,8 +1563,13 @@ esac
 
 doeffects() {
 
-	somedevices "$1"
-	
+	if [ "$1" = "light" ] || [ "$1" = "group" ]; then
+		somedevices "$1"
+	else
+		echo "huetil: play command expects light or group"
+		exit
+	fi
+
 	if ! echo "$2" | grep -q "^[0-9]"
 	then
 		huenum=$(name2num "$1" "$2")
@@ -1630,7 +1603,15 @@ doeffects() {
 			fi
 		;;
 		breathe)
-				jsonData="$jsonData\"alert\":\"$4\"}"
+			if [ "$4" = "long" ]; then
+					beffect=lselect
+			elif [ -z "$4" ]; then
+					beffect=select
+			else
+				echo "huetil: unknown breathe type $4"
+				exit
+			fi
+			jsonData="$jsonData\"alert\":\"$beffect\"}"
 		;;
 		bri-inc)
 			if [ $4 -lt -255 ] || [ $4 -gt 255 ]; then
@@ -1687,7 +1668,12 @@ setstuff() {
 
 #	printf "setstuff 1: %s  2: %s\\n" $2 $3
 
-	somedevices "$2"
+	if [ "$2" = "light" ] || [ "$2" = "group" ]; then
+		somedevices "$2"
+	else
+		echo "huetil: set command expects light or group"
+		exit
+	fi
 	
 	if ! echo "$3" | grep -q "^[0-9]"
 	then
