@@ -100,7 +100,7 @@ if [ "$OS" = "merlin" ] ; then
 	SCRIPTCONF="$SCRIPTDIR/huetil.conf"
 else
 	SCRIPTLOC="/usr/local/sbin/"
-	SCRIPTDIR="/$HOME/.conf/$SCRIPTNAME"
+	SCRIPTDIR="/$HOME/.config/$SCRIPTNAME"
 	SCRIPTCONF="$SCRIPTDIR/huetil.conf"
 fi
 
