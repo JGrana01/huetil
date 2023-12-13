@@ -7,8 +7,8 @@
 # Author: John Grana jgranaroc@gmail.com
 #    based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.1.0
-# date    : 12/01/2023
+# version : v1.2.2
+# date    : 12/13/2023
 #
 # inplemented features:
 # - turnin on a hue lightbulb or group
@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.1"
+SCRIPTVER="1.2.4"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 
@@ -98,10 +98,12 @@ if [ "$OS" = "merlin" ] ; then
 	SCRIPTLOC="/jffs/scripts"
 	SCRIPTDIR="/jffs/addons/$SCRIPTNAME"
 	SCRIPTCONF="$SCRIPTDIR/huetil.conf"
+	CURLAP="/usr/sbin/curl"
 else
 	SCRIPTLOC="/usr/local/sbin/"
 	SCRIPTDIR="/$HOME/.config/$SCRIPTNAME"
 	SCRIPTCONF="$SCRIPTDIR/huetil.conf"
+	CURLAP="/usr/bin/curl"
 fi
 
 Xval=0
@@ -248,7 +250,7 @@ showhuestuff() {
 
 showhuelights() {
 
-	curl -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/lights.json" --request GET ${hueBaseUrl}/lights
+	$CURLAP -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/lights.json" --request GET ${hueBaseUrl}/lights
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send show command."
@@ -266,7 +268,7 @@ showhuelights() {
 
 showhuegroups() {
 
-	curl -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/groups.json" --request GET ${hueBaseUrl}/groups
+	$CURLAP -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/groups.json" --request GET ${hueBaseUrl}/groups
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send show command."
@@ -302,7 +304,7 @@ checkscenes() {
 
 	somedevices "scenes"
 
-	curl -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/scenes.json" --request GET ${hueBaseUrl}/scenes
+	$CURLAP -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/scenes.json" --request GET ${hueBaseUrl}/scenes
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send show command"
@@ -358,7 +360,7 @@ hueSceneOn() {
 	
 	hueJsonData="{\"on\":true,\"scene\":\"$hueSceneId\"}"
 
-	curl --max-time ${hueTimeOut} --silent --request PUT --data ${hueJsonData} ${hueUrl} > $HUERESPONSE
+	$CURLAP --max-time ${hueTimeOut} --silent --request PUT --data ${hueJsonData} ${hueUrl} > $HUERESPONSE
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send scene command to ${hueGroup}/${hueScene}."
@@ -577,7 +579,7 @@ hueCycle() {
 		exit 1
 	fi
 	
-	curl --max-time ${hueTimeOut} --silent --request PUT --data '{"on":true,"bri":254,"hue":54000,"sat":255}' ${hueUrl} &> /dev/null
+	$CURLAP --max-time ${hueTimeOut} --silent --request PUT --data '{"on":true,"bri":254,"hue":54000,"sat":255}' ${hueUrl} &> /dev/null
 	
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send reset command to ${hueType}/${hueTypeNumber}."
@@ -585,7 +587,7 @@ hueCycle() {
 	
 	lcount=${hueState1}
 	while [ "$lcount" -lt "$hueState2" ]; do
-		curl --max-time ${hueTimeOut} --silent --request PUT --data '{"hue":'${lcount}',"transitiontime":'${Ttime}'}' ${hueUrl} &> /dev/null
+		$CURLAP --max-time ${hueTimeOut} --silent --request PUT --data '{"hue":'${lcount}',"transitiontime":'${Ttime}'}' ${hueUrl} &> /dev/null
 		if [ ${?} -ne 0 ]; then
 			echo "[-] huetil: Failed to send cycle command to ${hueType}/${hueTypeNumber}, Hue is: ${hueValue}."
 		else
@@ -696,7 +698,7 @@ fi
 				echo "huetil: getcolor only works with lights"
 				exit
 			fi
-			curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.state.xy' > $HUERESPONSE
+			$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -M '.state.xy' > $HUERESPONSE
 			if [ ${?} -ne 0 ]; then
 				echo "[-] huetil: Failed to send command to bridge"
 				exit 1
@@ -704,7 +706,7 @@ fi
 			checkhueresp
 		;;
 		info)
-			curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.' > $HUERESPONSE
+			$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.' > $HUERESPONSE
 			if [ ${?} -ne 0 ]; then
 				echo "[-] huetil: Failed to send command to bridge"
 				exit 1
@@ -714,7 +716,7 @@ fi
 		save)
 			case $hueType in
 					light)
-						curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.state' > $HUERESPONSE
+						$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.state' > $HUERESPONSE
 						if [ ${?} -ne 0 ]; then
 							echo "[-] huetil: Failed to send command to bridge"
 							exit 1
@@ -722,7 +724,7 @@ fi
 						checkhueresp
 					;;
 					group)
-						curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.action' > $HUERESPONSE
+						$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.action' > $HUERESPONSE
 						if [ ${?} -ne 0 ]; then
 							echo "[-] huetil: Failed to send command to bridge"
 							exit 1
@@ -760,7 +762,7 @@ fi
 			fi
 			if [ "${hueType}" = "light" ]; then
 				hueUrlcheck="${hueBaseUrl}/lights/${hueTypeNumber}"
-				if [ "$(curl --max-time ${hueTimeOut} --silent --request GET ${hueUrlcheck} | jq -r '.state.on')" = "false" ]; then
+				if [ "$($CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrlcheck} | jq -r '.state.on')" = "false" ]; then
 					echo "[-] huetil: Restoreing light ${hueTypeNumber} requires the light to be on"
 					echo "[-] huetil: Turn the light on (huetil light $hueTypeNumber turn on)"
 					exit 1
@@ -769,7 +771,7 @@ fi
 
 			hueJsonData="$(cat $savename)"
 	
-			curl --max-time ${hueTimeOut} --silent --request PUT --data "${hueJsonData}" "${hueUrl}" > $HUERESPONSE
+			$CURLAP --max-time ${hueTimeOut} --silent --request PUT --data "${hueJsonData}" "${hueUrl}" > $HUERESPONSE
 			if [ ${?} -ne 0 ]; then
 				echo "[-] huetil: Failed to send command to bridge."
 				exit 1
@@ -830,7 +832,7 @@ huenumdevice() {
 		*) echo "[-] huetil: The hue device mode is not lights, groups or scenes."; exit 1 ;;
 	esac
 
-	curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.[].name' > $HUERESPONSE
+	$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.[].name' > $HUERESPONSE
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send command to bridge."
@@ -905,7 +907,7 @@ if [ "$debug" -eq 1 ]; then
 	read a
 fi
 
-	curl --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.[]' > $HUERESPONSE
+	$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -C '.[]' > $HUERESPONSE
 	
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send command to bridge."
@@ -1148,7 +1150,7 @@ EOF
 		echo -n "Press the link button - then press enter..."
 		read a
 		echo
-		curl --max-time ${hueTimeOut} --silent --request POST --data ${hueJsonData} ${hueUrl} > $HUEHASH
+		$CURLAP --max-time ${hueTimeOut} --silent --request POST --data ${hueJsonData} ${hueUrl} > $HUEHASH
 		if [ ${?} -ne 0 ]; then
 			echo "[-] huetil: Failed to send scene command to hue bridge."
 			exit 1
@@ -1209,7 +1211,7 @@ gethueconfig() {
 
 	hueBaseUrl="http://${hueBridge}:${huePort}"
 	hueUrl="${hueBaseUrl}/api/${hueApiHash}/config" 
-	curl --max-time ${hueTimeOut} --request GET ${hueUrl} > $SCRIPTDIR/hueconfig
+	$CURLAP --max-time ${hueTimeOut} --request GET ${hueUrl} > $SCRIPTDIR/hueconfig
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send command to bridge."
@@ -1290,7 +1292,7 @@ checkhueip() {
 		hueUrl="http://"$1":80/api/0/config"
 		rm -f /tmp/huetmp
 		HueBridgeName=""
-		curl -S --max-time 10 --silent -o "/tmp/huetmp" --request GET "$hueUrl"
+		$CURLAP -S --max-time 10 --silent -o "/tmp/huetmp" --request GET "$hueUrl"
 		if [ -z /tmp/huetmp ]; then
 			"[-] huetil: Error - could not retrieve data from Hue $1"
 			chkup=1
@@ -1407,16 +1409,36 @@ remove_hue() {
 
 updatehuetil() {
 	if [ -x "$SCRIPTLOC/$SCRIPTNAME" ] && [ -f "$SCRIPTCONF" ]; then
+
+		$CURLAP --retry 3 --silent "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil.version" -o "$SCRIPTDIR/huetil.version" && chmod 0755 "$SCRIPTDIR/huetil.version"
+		
+		if [ -z "$SCRIPTDIR/huetil.version" ]; then
+			echo "huetil: Could not retrieve version number from github. Exiting."
+			exit
+		fi
+
+		oldwas=$(grep -m 1 "SCRIPTVER=" "$SCRIPTLOC/$SCRIPTNAME" | sed 's/SCRIPTVER\=//g' )
+		newis=$(grep -m 1 "SCRIPTVER=" "$SCRIPTDIR/huetil.version" | sed 's/SCRIPTVER\=//g')
+
+		if [ "$oldwas" = "$newis" ]; then
+			echo "huetil is up to date"
+			exit
+		fi
+
 		printf "\\nDownload and install the latest version of huetil (Y/N)? "
 		read a
 		if [ "$a" = "n" ] || [ "$a" = "N" ]; then
 			exit
 		else
-			oldwas=$(grep -m 1 "SCRIPTVER=" /jffs/scripts/huetil)
-			printf "\\nOk, downloading huetil again\\n"
-			/usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil" -o "/jffs/scripts/huetil" && chmod 0755 /jffs/scripts/huetil
+			printf "\\nOk, downloading huetil\\n"
+			$CURLAP --retry 3 --silent "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil" -o "/tmp/huetil" && chmod 0755 /tmp/huetil
+			if [ "$OS" = "merlin" ]; then
+				cp /tmp/huetil $SCRIPTLOC/$SCRIPTNAME
+			else
+				sudo cp /tmp/huetil $SCRIPTLOC/$SCRIPTNAME
+			fi
+			rm /tmp/huetil
 			printf "\\n\\nDone.\\n"
-			newis=$(grep -m 1 "SCRIPTVER=" /jffs/scripts/huetil)
 			printf "Old version was %s, new version us %s\\n" $oldwas $newis
 			
 		fi
@@ -1660,7 +1682,7 @@ doeffects() {
 		;;
 	esac
 
-	curl --max-time ${hueTimeOut} --silent --request PUT --data "$jsonData" ${hueUrl} > $HUERESPONSE
+	$CURLAP --max-time ${hueTimeOut} --silent --request PUT --data "$jsonData" ${hueUrl} > $HUERESPONSE
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send command to bridge."
 		exit 1
@@ -1735,7 +1757,7 @@ if [ "$debug" = "1" ] ; then
 fi
 
 
-	curl --max-time ${hueTimeOut} --silent --request PUT --data "$jsonData" ${hueUrl} > $HUERESPONSE
+	$CURLAP --max-time ${hueTimeOut} --silent --request PUT --data "$jsonData" ${hueUrl} > $HUERESPONSE
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send set command to $1/$2."
@@ -1762,7 +1784,7 @@ fi
 checkapi
 
 if [ -z $(which jq) ]; then
-	echo "[-] huetil: jq is not installed. This script needs curl to communicate with the hue api."
+	echo "[-] huetil: jq is not installed. This script needs $CURLAP to communicate with the hue api."
         echo "[-] huetil: Please run huetil install and try again."
         exit 1
 fi
