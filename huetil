@@ -340,11 +340,16 @@ hueSceneOn() {
 		huenum="$hueGroup"
         fi
 
+	if [ ! $(grep -c "$1" "$SCRIPTDIR/scenes") -gt 0 ]; then
+		echo "[-] huetil: ${hueScene} : is not a scene."
+		exit
+	fi
+
 
 	hueSceneId=$(cat "$SCRIPTDIR/scenes" | grep "$huenum" | grep "$hueScene" | awk '{ print $3}') 
 
 	if [ -z "$hueSceneId" ]; then
-		echo "[-] huetil: ${hueScene} : is not a scene."
+		echo "[-] huetil: ${hueScene} : is not available for the group ${hueGroup}."
 		exit 1
 	fi
 
