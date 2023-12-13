@@ -35,7 +35,7 @@ Before huetil can issue commands to the Hue Bridge, it requires and authenticate
 attempt to get one from the bridge.
 This requires the user to first press the round "link" button on the top of the Hue Bridge, then press Enter when prompted by install.
 If successful, it populates the ApiHash (username) in huetil.conf. huetil is now ready for use.
-If the user decides to do this later or it fails, they can attempt it again wirh huetil by executing:
+If the user decides to do this later or it fails, they can attempt it again with huetil by executing:
 
 **$ huetil gethueun**
 
@@ -191,39 +191,26 @@ To find the available scenes (and the light group they are assigned to) use the 
 ```
 Scene              Group
 ----------------------------------
-Scene_storageScene_  2
-Bright
-Bright
-New_scene            5
-Festive_fun          5
-ciqTNEQ88EijfgY
-lg97WHkRF7HXOKP
-Color_burst          5
-Relax                3
-Merry_Christmas      3
-Scene_previous_      3
-Nightlight           3
-Autumn               2
-Warmer               3
-HX_Off
-Rio                  3
-Glowing_grins        2
-Relax
-Read
-Energize             82
-Concentrate          82
-Read                 82
-Dimmed
-Bright
-Bright
-Warm                 1
-Bright               82
-Relax                82
 Nightlight           82
-
+Scene_previous_      3
+Energize             82
+Rio                  3
+Read                 82
+Festive_fun          5
+Merry_Christmas      3
+Glowing_grins        2
+Relax                3
+Warmer               3
+Bright               82
+Color_burst          5
+Warm                 1
+Scene_storageScene_  2
+Relax                82
+New_scene            5
+Autumn               2
+Concentrate          82
+Nightlight           3
 ```
-Some Scenes do not show a Group number...
-
 To turn on a scene (for example)
 
 **$ huetil scene Autumn 2**
