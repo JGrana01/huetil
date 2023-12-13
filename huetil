@@ -1293,10 +1293,12 @@ checkhueip() {
 		curl -S --max-time 10 --silent -o "/tmp/huetmp" --request GET "$hueUrl"
 		if [ -z /tmp/huetmp ]; then
 			"[-] huetil: Error - could not retrieve data from Hue $1"
-			return false
+			chkup=1
+			return
 		fi
 		HueBridgeName=$(jq -r '.[]' /tmp/huetmp | head -1)
-		return true
+		chkup=0
+		return
 }
 
 # install scrpipt - sets up directories, conf file, etc.
@@ -1332,7 +1334,7 @@ install_hue() {
 	if [ "$OS" = "merlin" ]; then
 		hubip=$(arp -n | grep "00:17:88" | grep -oP '(?<=[(])[^)]*')
 	else
-		hubip=$(sudo arp-scan -l --retry 4 --bandwidth 64K --ouifile=/usr/share/arp-scan/ieee-oui.txt --macfile=/etc/arp-scan/mac-vendor.txt | \
+		hubip=$(sudo arp-scan -l --retry 4 --bandwidth 64K --ouifile=/usr/share/arp-scan/ieee-oui.txt --macfile=/usr/share/arp-scan/mac-vendor.txt | \
         grep "Philips Lighting" | awk '{print $1}')
 	fi
 	echo "done."
