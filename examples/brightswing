@@ -1,0 +1,78 @@
+#!/bin/sh
+
+#
+# brightswing - increase then decrease brightness of light or group rinse and repeat
+#             first argument is "light" or "group" the next arg is the ID or name
+#
+#             set SHOWDELAY to the number of seconds between changes
+#
+#             to exit early, press <Enter>
+#
+#
+
+SHOWDELAY=1			# seconds between changes
+MAXBRI=250			# maximum brightness you want
+MINBRI=10			# lowest
+BRISTEP=5			# increment for increase/decrease
+TRANSTIM=1			# set to 1 for quicker transition
+
+
+# exit if enter pressed
+
+checkexit() {
+         if read -r -t $SHOWDELAY; then
+            	printf "\\n\\n"
+		huetil restore $1 $2
+		exit
+        fi
+}
+
+
+# save present state
+
+huetil save $1 $2
+
+#
+# on exits, restore the light
+#
+
+trap 'huetil restore $1 $2; exit' INT
+
+
+#
+# walk through the colors from the "colors" command and display
+#
+
+
+case $1 in
+	light)
+	;;
+	group)
+	;;
+	*)
+		echo "need light or group"
+		echo "brightswing light|group ID|name"
+		exit
+	;;
+esac
+
+
+# set an intial brightness
+
+huetil set $1 $2 bri $MINBRI
+
+brival="$MINBRI"
+while true; do
+	while [ "$brival" -lt "$MAXBRI" ] && [ "$brival" -lt "255" ]; do
+		huetil set $1 $2 bri $brival trans $TRANSTIM
+		checkexit $1 $2
+		brival="$((brival + BRISTEP))"
+	done
+	while [ "$brival" -gt "$MINBRI" ] && [ "$brival" -gt "0" ]; do
+		huetil set $1 $2 bri $brival trans $TRANSTIM
+		checkexit $1 $2
+		brival="$((brival - BRISTEP))"
+	done
+	brival="$MINBRI"             # reset back
+done
+

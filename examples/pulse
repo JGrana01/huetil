@@ -1,0 +1,40 @@
+#!/bin/sh
+
+
+# time between increase/decrease
+
+SLDELAY=1
+
+checkexit() {
+         if read -r -t $SLDELAY; then
+            	printf "\\n"
+		huetil restore light $1
+		exit
+        fi
+}
+
+
+#
+# on exits, restore the light
+#
+
+trap 'huetil restore light $1; exit' INT
+
+
+
+# save initial light state
+
+huetil save light $1
+
+# get to a known brightness
+
+huetil set light $1 on bri 230
+
+# now pulse until Enter is pressed
+
+while true; do
+		huetil play light $1 bri-inc -200
+		checkexit $1
+		huetil play light $1 bri-inc 200
+		checkexit $1
+done

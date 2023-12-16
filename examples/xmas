@@ -1,0 +1,96 @@
+#!/bin/sh
+
+#
+# xmas - take a group of 2 or 4 lights and have them change
+#        between red and green
+#
+
+SLDELAY=1		# how lone between changing
+TRANSTIM=2		# transition time between color change
+numlights=0
+
+savelights() {
+	huetil save light $LIGHT1
+	huetil save light $LIGHT2
+	if [ $numlights = 4 ]; then
+		huetil save light $LIGHT3
+		huetil save light $LIGHT4
+	fi
+}
+
+restorelights() {
+	huetil restore light $LIGHT1
+	huetil restore light $LIGHT2
+	if [ $numlights = 4 ]; then
+		huetil restore light $LIGHT3
+		huetil restore light $LIGHT4
+	fi
+}
+
+oneway() {
+	huetil set light $LIGHT1 color green trans $TRANSTIM
+	huetil set light $LIGHT2 color red trans $TRANSTIM
+	if [ $numlights = 4 ]; then
+		huetil set light $LIGHT3 color green trans $TRANSTIM
+		huetil set light $LIGHT4 color red trans $TRANSTIM
+	fi
+}
+
+otherway() {
+	huetil set light $LIGHT1 color red trans $TRANSTIM
+	huetil set light $LIGHT2 color green trans $TRANSTIM
+	if [ $numlights = 4 ]; then
+		huetil set light $LIGHT3 color red trans $TRANSTIM
+		huetil set light $LIGHT4 color green trans $TRANSTIM
+	fi
+}
+
+checkexit() {
+         if read -r -t $SLDELAY; then
+		restorelights
+		exit
+        fi
+}
+
+case $# in
+	2)
+		LIGHT1="$1"
+		LIGHT2="$2"
+		numlights=2
+	;;
+	4)
+		LIGHT1="$1"
+		LIGHT2="$2"
+		LIGHT3="$3"
+		LIGHT4="$4"
+		numlights=4
+	;;
+	*)
+		echo "xmas: needs 2 or 4 lights..."	
+		exit
+	;;
+esac
+
+printf "L1 %s L2 %s L3 %s L4 %s\\n" $LIGHT1 $LIGHT2 $LIGHT3 $LIGHT4
+printf "Numlights: %s\\n" $numlights
+read a
+
+#
+# save present states
+#
+
+savelights
+
+#
+# on exits, restore the light
+#
+
+trap 'restorelights; exit' INT
+
+
+while true; do
+	oneway
+	checkexit
+	otherway
+	checkexit
+done
