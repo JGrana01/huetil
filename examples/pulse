@@ -1,18 +1,42 @@
 #!/bin/sh
 
+#
+# pulse - turn the brightness of a light up then down then repeat
+#         using the Hue "play" command
+#
 
 # time between increase/decrease
 
 SLDELAY=1
 
+# workaround for Ubuntu/Linux dash shell
+# doesn't support timed read commands...
+
+if [ "$(uname -o)" = "GNU/Linux" ]; then
+	SHL="/usr/bin/bash"
+else
+	SHL="/bin/sh"
+fi
+
 checkexit() {
-         if read -r -t $SLDELAY; then
+         if $($SHL -c "read -r -t $SLDELAY"); then
             	printf "\\n"
 		huetil restore light $1
 		exit
         fi
 }
 
+# make sure there is a light
+
+if [ $# -ne 1 ]; then
+	echo "pulse needs a light arguments"
+	echo " i.e. pulse 2"
+	exit
+fi
+
+# save initial light state
+
+huetil save light $1
 
 #
 # on exits, restore the light
@@ -20,17 +44,11 @@ checkexit() {
 
 trap 'huetil restore light $1; exit' INT
 
-
-
-# save initial light state
-
-huetil save light $1
-
 # get to a known brightness
 
 huetil set light $1 on bri 230
 
-# now pulse until Enter is pressed
+# now pulse until Enter is pressed or Ctrl-C
 
 while true; do
 		huetil play light $1 bri-inc -200
