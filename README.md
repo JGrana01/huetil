@@ -315,7 +315,9 @@ _restore_ takes a previously saved state file and "restore" the light or group b
 Without a _filename_ argument, huetil will use the saved settings in the ~huetil/saved directory. With a _filename_ it will use the information from that file.
 This is useful after a session of tuning the lights or to transfer the settins (using the _filename_ argument) from one light to another.
 
-_restore_ does not support a "restore all", unlike save.
+_restore_ does not support a "restore all", unlike save. See next point...
+
+_restore_ can **only** be used if the light or group is **on**. This is a restriction in the Hue API. _huetil_ will complain if the light or group is not **on** when invoked.
 
 ### **scene (scenename) (group name or ID)**
 The _scene_ command turns on a pre-defined scene to a group of lights.
@@ -403,6 +405,13 @@ _convert violet_
 ```
 0.3644 0.2133
 ```
+## Notes
+
+The **set** command always turns the light or group **on**.
+
+There are numerous ways to set the color of a light or group. You can set "color", hue and saturation (hue sat), xy or color temperature (ct).
+
+If multiple methods are used then the Hue applies a priority: xy > ct > hue saturation.
 
 ## There are also a set of utilty commands.
 ```
