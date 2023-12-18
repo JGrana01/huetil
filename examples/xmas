@@ -9,6 +9,7 @@ SLDELAY=1		# how lone between changing
 TRANSTIM=2		# transition time between color change
 numlights=0
 
+
 savelights() {
 	huetil save light $LIGHT1
 	huetil save light $LIGHT2
@@ -25,6 +26,23 @@ restorelights() {
 		huetil restore light $LIGHT3
 		huetil restore light $LIGHT4
 	fi
+}
+
+# workaround for Ubuntu/Linux dash shell
+# doesn't support timed read commands...
+
+if [ "$(uname -o)" = "GNU/Linux" ]; then
+	SHL="/usr/bin/bash"
+else
+	SHL="/bin/sh"
+fi
+
+checkexit() {
+         if $($SHL -c "read -r -t $SLDELAY"); then
+            	printf "\\n"
+		restorelights
+		exit
+        fi
 }
 
 oneway() {
@@ -45,12 +63,8 @@ otherway() {
 	fi
 }
 
-checkexit() {
-         if read -r -t $SLDELAY; then
-		restorelights
-		exit
-        fi
-}
+
+# main
 
 case $# in
 	2)
@@ -66,14 +80,11 @@ case $# in
 		numlights=4
 	;;
 	*)
-		echo "xmas: needs 2 or 4 lights..."	
+		echo "xmas: needs 2 or 4 lights..."
+		echo " i.e.  xmas 5 6"
 		exit
 	;;
 esac
-
-printf "L1 %s L2 %s L3 %s L4 %s\\n" $LIGHT1 $LIGHT2 $LIGHT3 $LIGHT4
-printf "Numlights: %s\\n" $numlights
-read a
 
 #
 # save present states
@@ -86,7 +97,6 @@ savelights
 #
 
 trap 'restorelights; exit' INT
-
 
 while true; do
 	oneway
