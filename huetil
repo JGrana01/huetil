@@ -7,7 +7,7 @@
 # Author: John Grana jgranaroc@gmail.com
 #    based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.2
+# version : v1.2.6
 # date    : 12/13/2023
 #
 # inplemented features:
@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.4"
+SCRIPTVER="1.2.6"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 
@@ -487,8 +487,6 @@ if [ "$debug" = "1" ]; then
 	read a
 fi
 
-#	somedevices ${hueType}
-
 	if ! echo "$1" | grep -q "^[0-9]"
 	then
                 echo "[-] huetil: x $1 is not a number."
@@ -698,7 +696,7 @@ fi
 				echo "huetil: getcolor only works with lights"
 				exit
 			fi
-			$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -M '.state.xy' > $HUERESPONSE
+			$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.' > $HUERESPONSE
 			if [ ${?} -ne 0 ]; then
 				echo "[-] huetil: Failed to send command to bridge"
 				exit 1
@@ -781,9 +779,9 @@ fi
 		;;
 	esac
 	
+	X=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '2p' | tr -d ',')
+	Y=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '3p' )
 	if [ "${hueCmnd}" = "color" ]; then
-		X=$(sed -n '2p' $HUERESPONSE | tr -d ',') 
-		Y=$( sed -n '3p' $HUERESPONSE)
 		printf "X=$X  Y=$Y\\n" 
 	elif [ "${hueCmnd}" = "info" ]; then
 		hname=$(pullarg $HUERESPONSE "name")
@@ -806,7 +804,7 @@ fi
 		else
 			ison="off"
 		fi
-		printf "%s %s (%s) is %s. Brightness: %s  Hue: %s  Saturation: %s  Color Temp: %s  Color Mode: %s\\n" $hueType $hueTypeNumber $hname $ison $hbri $hhue $hsat $hct $cmode
+		printf "%s %s (%s) is %s. Brightness: %s  X: %s Y: %s  Hue: %s  Saturation: %s\\n     Color Temp: %s  Color Mode: %s\\n" $hueType $hueTypeNumber $hname $ison $hbri $X $Y $hhue $hsat $hct $cmode
 
 		if [ "$hueType" = "group" ]; then
 			printf "Lights in Group $hname: "
@@ -871,6 +869,7 @@ somedevices() {
 	fi
 }
 
+# function for trying different scenarios. Decided to leave in for now
 
 tstmode() {
 
@@ -878,26 +877,19 @@ tstmode() {
 	hueTypeNumber=${2}
 	hueState=${3}
 
-#	if ! echo "${hueTypeNumber}" | grep -q "^[0-9]"
-#	then
-#		echo "[-] huetil: ${hueType} number: ${hueTypeNumber} is not a number."
-#		exit 1
-#	fi
 
 	case ${hueType} in
-#		light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}/state" ;;
 		lights) hueUrl="${hueBaseUrl}/lights" ;;
-#		group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}/action" ;;
 		groups) hueUrl="${hueBaseUrl}/groups" ;;
 		scenes) hueUrl="${hueBaseUrl}/scenes" ;;
-#		*) echo "[-] huetil: The hue device mode is not lights, groups or scenes."; exit 1 ;;
+		*) echo "[-] huetil: The hue device mode is not lights, groups or scenes."; exit 1 ;;
 	esac
 
 	case ${hueState} in
 		on) hueJsonData="{\"effect\":\"colorloop\"}" ;;
 		off) hueJsonData="{\"effect\":\"none\"}" ;;
 		restore) hueJsonData="$(cat $SCRIPTDIR/saved/${hueType}_${hueTypeNumber}.state)" ;;
-#		*) echo "[-] huetil: The hue device effect can only be turned on or off."; exit 1 ;;
+		*) echo "[-] huetil: The hue device effect can only be turned on or off."; exit 1 ;;
 	esac
 
 if [ "$debug" -eq 1 ]; then
@@ -1410,7 +1402,9 @@ remove_hue() {
 updatehuetil() {
 	if [ -x "$SCRIPTLOC/$SCRIPTNAME" ] && [ -f "$SCRIPTCONF" ]; then
 
-		$CURLAP --retry 3 --silent "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil.version" -o "$SCRIPTDIR/huetil.version" && chmod 0755 "$SCRIPTDIR/huetil.version"
+		rm -f "$SCRIPTDIR/huetil.version"
+
+		$CURLAP --retry 3 --silent "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil.version" -o "$SCRIPTDIR/huetil.version"
 		
 		if [ -z "$SCRIPTDIR/huetil.version" ]; then
 			echo "huetil: Could not retrieve version number from github. Exiting."
@@ -1424,6 +1418,8 @@ updatehuetil() {
 			echo "huetil is up to date"
 			exit
 		fi
+
+		printf "New version ($newis) of huetil found.\\n"
 
 		printf "\\nDownload and install the latest version of huetil (Y/N)? "
 		read a
@@ -1509,8 +1505,7 @@ num2name() {
 
 parsem() {
 shift
-i=1;
-while [[ "$#" -gt 0 ]]; do
+while [ "$#" -gt 0 ]; do
     case $1 in
 		on)
 			jsonData='{"on":true,'
@@ -1553,7 +1548,6 @@ fi
 	   		exit
            	;;
     	esac
-#        hue) target="$2"; printf "cmd %s arg %s\\n" $1 $2; shift ;;
     shift
 done
 }
@@ -1695,8 +1689,6 @@ doeffects() {
 
 setstuff() {
 
-#	printf "setstuff 1: %s  2: %s\\n" $2 $3
-
 	if [ "$2" = "light" ] || [ "$2" = "group" ]; then
 		somedevices "$2"
 	else
@@ -1755,7 +1747,6 @@ if [ "$debug" = "1" ] ; then
 	printf "jsonData: %s\\n" "$jsonData"
 	read a
 fi
-
 
 	$CURLAP --max-time ${hueTimeOut} --silent --request PUT --data "$jsonData" ${hueUrl} > $HUERESPONSE
 
@@ -1826,7 +1817,6 @@ case ${hueDeviceAction} in
 			exit 0
 		;;
 		colors)
-			printf "Availble colors for hue:\\n\\n"
 			sed -n '/alice-blue)/,/yellow-green)/p;/yellow-green)/q' "$SCRIPTLOC/$SCRIPTNAME" | awk 'BEGIN { FS = ")" } ; { print $1 }' | tr -s '\t' ' ' | column -x
 			printf "\\n\\nAvailable color temps (ct):\\n\\n"
 			echo "    Cool Daylight Natural Warm Candle"
@@ -1886,13 +1876,6 @@ case ${hueDeviceAction} in
 		;;
 # testmode - hidden command to expriment with differnt things
 		testmode)
-			somedevices "light"
-			printf "There are %i lights\\n" $numdev
-			somedevices "group"
-			printf "There are %i groups\\n" $numdev
-			somedevices "scenes"
-			printf "There are %i scenes\\n" $numdev
-			hueshowdevices
 			exit 0
 		;;
 	set)
