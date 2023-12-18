@@ -7,7 +7,7 @@
 # Author: John Grana jgranaroc@gmail.com
 #    based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.6
+# version : v1.2.7
 # date    : 12/13/2023
 #
 # inplemented features:
@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.6"
+SCRIPTVER="1.2.7"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 
@@ -779,8 +779,14 @@ fi
 		;;
 	esac
 	
-	X=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '2p' | tr -d ',')
-	Y=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '3p' )
+	if [ "$hueType" = "group" ]; then
+		X=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '2p' | tr -d ',')
+		Y=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '3p' )
+	else
+		X=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '2p' | tr -d ',')
+		Y=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '3p' )
+	fi
+
 	if [ "${hueCmnd}" = "color" ]; then
 		printf "X=$X  Y=$Y\\n" 
 	elif [ "${hueCmnd}" = "info" ]; then
