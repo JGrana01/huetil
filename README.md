@@ -61,6 +61,9 @@ A good way to test the install and configuration is to issue a command to show a
 
 **$ huetil show all**
 
+After setting up the config file, install will ask of you want it to setup and download a small collection of example scripts that use huetil.
+If you press "Y", install will create an examples directory and download the scripts there.
+
 ## Usage
 huetil supports numerous commands along with command arguments. Here is the present list:
 
@@ -420,6 +423,8 @@ help - display a help screen
 version - display huetils version
 
 install - install huetil based on the operating system
+
+update - check for and opptionally install a new version of huetil and possibly the example files
 
 uninstall - remove huetil and it's conf directory
 
