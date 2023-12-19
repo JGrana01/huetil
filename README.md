@@ -99,7 +99,7 @@ getcolor                        :  huetil getcolor light n
 info                            :  huetil info {bridge}|light|group n
 scene                           :  huetil scene scenename group
 
-save lights/groups settings     :  huetil save <lights|groups|all> n {filename}
+save light/group settings       :  huetil save <light|group|all> n {filename}
 restore light settings          :  huetil restore <light> n {filename}
 show lights/groups/scenes               :  huetil show <lights|groups|scenes|all>
 colors - list colors            :  huetil colors
