@@ -72,7 +72,7 @@ huetil Version 1.2.0
 
  usage: huetil <command> {command arguments}
 
- set <light|group> <ID|name> <arg value> <arg value>...
+ set <light|group> <ID|name> <arg value> {arg value}...
    arg can be...
        <on|off>         :  huetil set light|group n <on|off> {color}
         sat             :  huetil set light|group n sat=<0-255>
@@ -95,19 +95,19 @@ huetil Version 1.2.0
        sat-inc            :  huetil play light|group n sat-inc <-255-255>
        ct-inc             :  huetil play light|group n ct-inc <-65534-65535>
 
-getcolor                                :  huetil getcolor light n
+getcolor                        :  huetil getcolor light n
 info                            :  huetil info {bridge}|light|group n
 scene                           :  huetil scene scenename group
 
 save lights/groups settings     :  huetil save <lights|groups|all> n {filename}
-restore lights/groups settings  :  huetil restore <lights|groups> n {filename}
+restore light settings          :  huetil restore <light> n {filename}
 show lights/groups/scenes               :  huetil show <lights|groups|scenes|all>
 colors - list colors            :  huetil colors
 convert - color to xy           :  huetil convert <color>
 
 help (this screen)              :  huetil help
 install                         :  huetil install
-uninstall                               :  huetil uninstall
+uninstall                       :  huetil uninstall
 version                         :  huetil version
 update                          :  huetil update
 set bridge username/API         :  huetil sethueun
