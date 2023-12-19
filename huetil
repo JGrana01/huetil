@@ -7,8 +7,8 @@
 # Author: John Grana jgranaroc@gmail.com
 #    based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.8
-# date    : 12/13/2023
+# version : v1.2.9
+# date    : 12/17/2023
 #
 # inplemented features:
 # - turnin on a hue lightbulb or group
@@ -64,7 +64,6 @@
 
 
 # define based on OS
-
 setOS() {
 
 	OSis=$(uname -o)
@@ -88,7 +87,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.8"
+SCRIPTVER="1.2.9"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 
@@ -1468,12 +1467,13 @@ updatehuetil() {
 
 		if [ -d $SCRIPTDIR/examples ]; then
 			printf "Would you also like to re-download the example scripts in $SCRIPTDIR/examples(Y/N)? "
-			printf "Note - this will overwrite all the example scripts so a backup tar file (examples.tar) will be created in that directory"
+			printf "\\n   (Note - this will overwrite all the example scripts so a backup tar file (examples.tar) will be created in that directory)"
 			read a
 			if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
 				tar cf examples.tar -C $SCRIPTDIR/examples .
 				getexamples
 			fi
+		fi
 	else
 		printf "\\nNo $SCRIPTLOC/$SCRIPTNAME or $SCRIPTCONF found"
 		printf "\\nDownload and install manually"
