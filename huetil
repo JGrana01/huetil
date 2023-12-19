@@ -7,7 +7,7 @@
 # Author: John Grana jgranaroc@gmail.com
 #    based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.7
+# version : v1.2.8
 # date    : 12/13/2023
 #
 # inplemented features:
@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.7"
+SCRIPTVER="1.2.8"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 
@@ -883,7 +883,6 @@ tstmode() {
 	hueTypeNumber=${2}
 	hueState=${3}
 
-
 	case ${hueType} in
 		lights) hueUrl="${hueBaseUrl}/lights" ;;
 		groups) hueUrl="${hueBaseUrl}/groups" ;;
@@ -1301,6 +1300,21 @@ checkhueip() {
 		return
 }
 
+getexamples() {
+
+	mkdir -p "$SCRIPTDIR/examples"
+
+	$CURLAP --retry 3 --silent "https://raw.githubusercontent.com/JGrana01/huetil/master/huetilexamples.tar" -o "$SCRIPTDIR/huetilexamples.tar" 
+	
+	if [ -f $SCRIPTDIR/huetilexamples.tar ]; then
+	 	 tar xvf $SCRIPTDIR/huetilexamples.tar -C $SCRIPTDIR
+	 	 rm -f $SCRIPTDIR/huetilexamples.tar
+	else
+		printf "huetil: download of examples tar file failed...\\n"
+	fi
+}
+
+
 # install scrpipt - sets up directories, conf file, etc.
 # OS supported are Asuswrt-Merlin and Raspbian (and possible other GNU/Linux
 
@@ -1378,6 +1392,13 @@ install_hue() {
 		exit 1
 	fi
 
+	printf "Would you also like to download a small collection of example scripts that use huetil (Y/N)? "
+	read a
+	if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
+		printf "This will download some scripts into the $SCRIPTDIR/examples directory"
+		getexamples
+	fi
+
 }
 
 # uninstall script - remove all the stuff we installed (except dependent apps like nmap)
@@ -1444,6 +1465,15 @@ updatehuetil() {
 			printf "Old version was %s, new version us %s\\n" $oldwas $newis
 			
 		fi
+
+		if [ -d $SCRIPTDIR/examples ]; then
+			printf "Would you also like to re-download the example scripts in $SCRIPTDIR/examples(Y/N)? "
+			printf "Note - this will overwrite all the example scripts so a backup tar file (examples.tar) will be created in that directory"
+			read a
+			if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
+				tar cf examples.tar -C $SCRIPTDIR/examples .
+				getexamples
+			fi
 	else
 		printf "\\nNo $SCRIPTLOC/$SCRIPTNAME or $SCRIPTCONF found"
 		printf "\\nDownload and install manually"
