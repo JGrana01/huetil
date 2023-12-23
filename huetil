@@ -45,7 +45,7 @@
 #	lights or groups can be defined by either their ID or by name.
 #
 # show lights:  huetil show <lights|groups|scenes|all>
-#                  will display the name and ID # of the lights, groups or scense
+#                  will display the name and ID # of the lights, groups or scenes
 # show colors:  huetil colors
 #                  display the list of colors (from Gammut C) that huetil knows how to send
 # save/restore: huetil save|restore <light|group|all> <ID or name> {filename}
@@ -87,7 +87,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.9"
+SCRIPTVER="1.2.10"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 
@@ -236,7 +236,7 @@ showhuestuff() {
 			showhuegroups show
 			echo -n "Next...(press Enter)"
 			read a
-			echo "Scense:"
+			echo "Scenes:"
 			showhuescenes ;;
 		*)
 			usage 
@@ -249,6 +249,9 @@ showhuestuff() {
 
 showhuelights() {
 
+local pprinttmp=/tmp/pprinttmp
+local jsontmp=/tmp/jsontmp
+
 	$CURLAP -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/lights.json" --request GET ${hueBaseUrl}/lights
 
 	if [ ${?} -ne 0 ]; then
@@ -256,16 +259,33 @@ showhuelights() {
 		exit 1
 	fi
 
-	cat "$SCRIPTDIR/lights.json" | jq -r 'keys[] as $k | "\(.[$k] | .name)\t\t\($k)"' | sed 's/ /_/g' | column -t > "$SCRIPTDIR/lights"
+	printf "Light\t\tID\\n" > $pprinttmp
+	cat "$SCRIPTDIR/lights.json" | jq -r 'keys[] as $k | "\(.[$k] | .name)\t\t\($k)"' | sed 's/ /_/g'  > "$jsontmp"
+	cat "$jsontmp" | column -t > "$SCRIPTDIR/lights"
+
 	if [ "$1" = "show" ]; then
-		printf "\\nLight Name		Light ID\\n\\n"
-		cat "$SCRIPTDIR/lights"
+		cat $jsontmp >> $pprinttmp
+                cat $pprinttmp | column -ts $'\t' > $jsontmp
+                len=$(cat $jsontmp | wc -L )
+                i=0
+                lonlin=""
+                while [ $i -lt $len ]; do
+                        lonlin=$lonlin-
+                        i="$((i + 1))"
+                done
+                lonlin=$lonlin-
+                awk -v v="$lonlin" 'NR==2{print v}1' $jsontmp
+                rm $pprinttmp
+                rm $jsontmp
 	fi
 }
 
 # the scipts that gets the groups on the bridge - name and ID number
 
 showhuegroups() {
+
+local pprinttmp=/tmp/pprinttmp
+local jsontmp=/tmp/jsontmp
 
 	$CURLAP -S --max-time ${hueTimeOut} --silent -o "$SCRIPTDIR/groups.json" --request GET ${hueBaseUrl}/groups
 
@@ -274,24 +294,57 @@ showhuegroups() {
 		exit 1
 	fi
 
-
-	cat "$SCRIPTDIR/groups.json" | jq -r 'keys[] as $k | "\(.[$k] | .name)\t\t\($k)\t\t\(.[$k] | .lights)"' | sed 's/ /_/g' | tr -d \" | column -t > "$SCRIPTDIR/groups"
+	printf "Group\tID\tLights\\n" > $pprinttmp
+	cat "$SCRIPTDIR/groups.json" | jq -r 'keys[] as $k | "\(.[$k] | .name)\t\($k)\t\(.[$k] | .lights)"' | sed 's/ /_/g' | tr -d \" > $jsontmp
+	cat "$jsontmp" | column -t > "$SCRIPTDIR/groups"
 
 	if [ "$1" = "show" ]; then
-		printf "\\nGroup Name		  ID    Lights\\n\\n"
-		cat "$SCRIPTDIR/groups"
+		cat $jsontmp >> $pprinttmp
+		cat $pprinttmp | column -ts $'\t' > $jsontmp
+		len=$(cat $jsontmp | wc -L )
+		i=0
+		lonlin=""
+		while [ $i -lt $len ]; do
+			lonlin=$lonlin-
+			i="$((i + 1))"
+		done
+		lonlin=$lonlin-
+		awk -v v="$lonlin" 'NR==2{print v}1' $jsontmp
+		rm $pprinttmp
+		rm $jsontmp
 	fi
 }
 
 # the scipts that gets the scenes on the bridge - name and group assigned to
 
 showhuescenes() {
-	
+
+local pprinttmp=/tmp/pprinttmp
+local jsontmp=/tmp/jsontmp
+
 	checkscenes
 	if [ $(cat $SCRIPTDIR/scenes| wc -l ) -gt 1 ]; then
-		echo "Scene              Group"
-		echo "----------------------------------"
-		cat "$SCRIPTDIR/scenes" | awk '{print $1"\t" $2}' | column -t
+		jq -c '.[] | .name,.group,.lights' "$SCRIPTDIR/scenes.json" > $jsontmp
+		echo "Scene	GroupID	Lights" > $pprinttmp
+		while read -r line1 && scene="$line1"; do
+			read line2 && group=$line2
+			read line3 && lights="$line3"
+			if [ ! "$group" = "null" ]; then
+				printf "%s\t%s\t%s\\n" "$scene" "$group" "$lights" >> $pprinttmp
+		fi
+		done < $jsontmp
+		sed 's/"//g' $pprinttmp | column -ts $'\t' > $jsontmp
+		len=$(cat $jsontmp | wc -L )
+		i=0
+		lonlin=""
+		while [ $i -lt $len ]; do
+			lonlin=$lonlin-
+			i="$((i + 1))"
+		done
+		lonlin=$lonlin-
+		awk -v v="$lonlin" 'NR==2{print v}1' $jsontmp
+		rm $pprinttmp
+		rm $jsontmp
 	else
 		echo "No scenes found"
 	fi
