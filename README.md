@@ -122,8 +122,8 @@ For example, the command
 might produce a list like this:
 
 ```
-Light Name              Light ID
-
+Light                ID
+---------------------------
 Left_Kitchen_Shelf   1
 Play_gradient_tube   10
 Spare_1              14
@@ -161,7 +161,7 @@ An example of output is:
 
 ```
 Group Name                ID    Lights
-
+------------------------------------------------
 Kitchen                   1    [19,18,1,3]
 Custom_group_for_$roomTL  10   [18,19]
 Custom_group_for_$roomBL  11   [18,19]
@@ -192,27 +192,27 @@ To find the available scenes (and the light group they are assigned to) use the 
 **$ huetil show scenes**
 
 ```
-Scene              Group
-----------------------------------
-Nightlight           82
-Scene_previous_      3
-Energize             82
-Rio                  3
-Read                 82
-Festive_fun          5
-Merry_Christmas      3
-Glowing_grins        2
-Relax                3
-Warmer               3
-Bright               82
-Color_burst          5
-Warm                 1
-Scene_storageScene_  2
-Relax                82
-New_scene            5
-Autumn               2
-Concentrate          82
-Nightlight           3
+Scene                GroupID  Lights
+---------------------------------------------
+Scene storageScene   2        [2,5,6,7,8,10]
+New scene            5        [2]
+Festive fun          5        [2]
+Color burst          5        [2]
+Relax                3        [5,6,7,8]
+Merry Christmas      3        [5,6,7,8]
+Scene previous       3        [5,6,7,8]
+Nightlight           3        [5,6,7,8]
+Autumn               2        [2,5,6,7,8,10]
+Warmer               3        [5,6,7,8]
+Rio                  3        [5,6,7,8]
+Glowing grins        2        [2,5,6,7,8,10]
+Energize             82       [18,19]
+Concentrate          82       [18,19]
+Read                 82       [18,19]
+Warm                 1        [1,3,18,19]
+Bright               82       [18,19]
+Relax                82       [18,19]
+Nightlight           82       [18,19]
 ```
 To turn on a scene (for example)
 
@@ -345,10 +345,11 @@ _Info_ will display the present state (off or on) and information relating to co
 With the argument _bridge_ it will display the full configuration informaion from the Hue Bridge. It is displayed in json format and piped through more (there is lots of detail).
 
 i.e.
-_info light Living_Room_Shelf_
+_info light Living_Room_1_
 
 ```
-light 2 (Living) is off. Brightness: 70  Hue: 48628  Saturation: 206  Color Temp: 153  Color Mode: xy
+light 5 (Living) is off. Brightness: 254  X: 0.4583 Y: 0.4099  Hue: 8381  Saturation: 141
+     Color Temp: 366  Color Mode: xy
 ```
 
 ### **getcolor (light) (ID or name)**
@@ -395,7 +396,6 @@ Availble colors for hue:
  thistle                 tomato                  turquoise               violet                  wheat                   white
  white-smoke             yellow                  yellow-green
 
-
 Available color temps (ct):
 
     Cool Daylight Natural Warm Candle
@@ -422,7 +422,7 @@ help - display a help screen
 
 version - display huetils version
 
-install - install huetil based on the operating system
+install - install huetil based on the operating system (Asusrt-Merlin or GNU/Linux (i.e. Raspberry Pi)
 
 update - check for and opptionally install a new version of huetil and possibly the example files
 
