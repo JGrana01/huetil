@@ -74,7 +74,7 @@ If you press "Y", install will create an examples directory and download the scr
 huetil supports numerous commands along with command arguments. Here is the present list:
 
 ```
-huetil Version 1.2.0
+huetil Version 1.2.11
 
  usage: huetil <command> {command arguments}
 
