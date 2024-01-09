@@ -5,13 +5,13 @@
 #       for Asuswrt-merlin routers and Raspberry Pi's
 # 
 # Author: John Grana jgranaroc@gmail.com
-#    based on the hue.sh by Harald van der Laan
+#   a rewite of a scripts based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.9
-# date    : 12/17/2023
+# version : v1.2.12
+# date    : 1/7/2024
 #
 # inplemented features:
-# - turnin on a hue lightbulb or group
+# - turn on/off a hue lightbulb or group
 # - change the saturation of the lightbulb or group
 # - change the brightness of the lightbulb or group
 # - change the hue of a lightbulb or group
@@ -20,9 +20,10 @@
 # - change the color of a light
 # - show lights, groups, scenes or all connected to the Hue Bridge
 # - save and restore attributes of lights or groups.
-# - display information on the hue bridge
+# - display information about the hue bridge
 # - display a list of known colors by name (i.e. yellow)
 # - convert a color name to it's x and y values
+# - support "action" commands from the Hue API
 #
 # usage: 	huetil command {arguments}
 #
@@ -87,9 +88,22 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.10"
+SCRIPTVER="1.2.11"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
+cleanuphue() {
+	rm -f $HUERESPONSE
+	rm -f $HUEHASH
+	rm -f /tmp/pprinttmp
+	rm -f /tmp/jsontmp
+	rm -f /tmp/huetmp
+	rm -f /tmp/lites
+	exit
+}
+
+trap cleanuphue INT TERM EXIT
+
+# this needs to be done first thing - figure out what OS we are running on
 
 setOS
 
@@ -677,7 +691,7 @@ hueSaveAll() {
 			hueattr "light" "$i" "save"
 		done
 	fi
-
+	
 	if [ $(huenumdevice group) -gt 0 ]; then
 		echo "Saving all groups present state..."
 		showhuegroups
@@ -702,11 +716,6 @@ hueattr() {
 	hueTypeNumber=${2}
 	hueCmnd=${3}
 	hueFileName=${4}
-
-	if [ "${hueType}" = "all" ]; then
-		hueSaveAll
-		exit
-	fi
 
 	if [ "${hueTypeNumber}" = "info" ] && [ "${hueType}" = "bridge" ]; then
 		gethueconfig
@@ -831,18 +840,20 @@ fi
 		;;
 	esac
 	
-	if [ "$hueType" = "group" ]; then
-		X=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '2p' | tr -d ',')
-		Y=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '3p' )
-	else
-		X=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '2p' | tr -d ',')
-		Y=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '3p' )
+	if [ ! "$hueCmnd" = "save" ]; then
+		if [ "$hueType" = "group" ]; then
+			X=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '2p' | tr -d ',')
+			Y=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '3p' )
+		else
+			X=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '2p' | tr -d ',')
+			Y=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '3p' )
+		fi
 	fi
 
 	if [ "${hueCmnd}" = "color" ]; then
 		printf "X=$X  Y=$Y\\n" 
 	elif [ "${hueCmnd}" = "info" ]; then
-		hname=$(pullarg $HUERESPONSE "name")
+		hname="$(jq -r '.name' $HUERESPONSE)"
 		hbri=$(pullarg $HUERESPONSE "bri")
 		hhue=$(pullarg $HUERESPONSE "hue")
 		hsat=$(pullarg $HUERESPONSE "sat")
@@ -862,7 +873,7 @@ fi
 		else
 			ison="off"
 		fi
-		printf "%s %s (%s) is %s. Brightness: %s  X: %s Y: %s  Hue: %s  Saturation: %s\\n     Color Temp: %s  Color Mode: %s\\n" $hueType $hueTypeNumber $hname $ison $hbri $X $Y $hhue $hsat $hct $cmode
+		printf "%s %s (%s) is %s. Brightness: %s  X: %s Y: %s  Hue: %s  Saturation: %s\\n     Color Temp: %s  Color Mode: %s\\n" $htype $hueTypeNumber "$hname" $ison $hbri $X $Y $hhue $hsat $hct $cmode
 
 		if [ "$hueType" = "group" ]; then
 			printf "Lights in Group $hname: "
@@ -1260,7 +1271,7 @@ gethueconfig() {
 
 	hueBaseUrl="http://${hueBridge}:${huePort}"
 	hueUrl="${hueBaseUrl}/api/${hueApiHash}/config" 
-	$CURLAP --max-time ${hueTimeOut} --request GET ${hueUrl} > $SCRIPTDIR/hueconfig
+	$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} > $SCRIPTDIR/hueconfig
 
 	if [ ${?} -ne 0 ]; then
 		echo "[-] huetil: Failed to send command to bridge."
@@ -1860,6 +1871,10 @@ if [ "$1" = "install" ]; then
 	install_hue
 	exit
 fi
+if [ "$1" = "uninstall" ]; then
+	remove_hue
+	exit
+fi
 
 checkapi
 
@@ -1883,7 +1898,6 @@ hueDevice=${2}
 hueDeviceNumber=${3}
 hueDeviceActionValue1=${4}
 hueDeviceActionValue2=${5}
-
 
 case ${hueDeviceAction} in
 
@@ -1932,11 +1946,11 @@ case ${hueDeviceAction} in
 			exit 0
 		;;
 		save)
+			if [ "${hueDevice}" = "all" ]; then
+				hueSaveAll
+				exit 0
+			fi
 			hueattr $hueDevice $hueDeviceNumber "save" $hueDeviceActionValue1
-			exit 0
-		;;
-		saveall)
-			hueattr "all"
 			exit 0
 		;;
 		restore)
