@@ -7,7 +7,7 @@
 # Author: John Grana jgranaroc@gmail.com
 #   a rewite of a scripts based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.14
+# version : v1.2.15
 # date    : 1/7/2024
 #
 # inplemented features:
@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.14"
+SCRIPTVER="1.2.15
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 cleanuphue() {
@@ -1425,14 +1425,15 @@ install_hue() {
 	else
 		echo "This might take a little while..."
 		hubip=$(sudo arp-scan -l --retry 4 --bandwidth 64K --ouifile=/usr/share/arp-scan/ieee-oui.txt --macfile=/etc/arp-scan/mac-vendor.txt | \
-        grep "Philips Lighting" | awk '{print $1}')
+        grep -m 1 "Philips Lighting" | awk '{print $1}')
 	fi
 	echo "done."
 
 	if [ ! -z $hubip ]; then
 		checkhueip $hubip
 		if [ "$HueBridgeName" != "" ]; then
-			printf "Found a Hue Bridge at %s (%s)\\n" $hubip "$HueBridgeName"
+			printf "\\nFound a Hue Bridge at %s (%s)\\n" $hubip "$HueBridgeName"
+			sleep 2
 			echo "hueBridge='${hubip}'" >> "$SCRIPTCONF"
 		fi
 	else
@@ -1443,14 +1444,14 @@ install_hue() {
 	echo "# IP Port number of bridge - usually 80" >> "$SCRIPTCONF"
 	echo "huePort='80'" >> "$SCRIPTCONF"
 	echo "# Print all messages (1) or just errors (0)" >> "$SCRIPTCONF"
-	echo "hueVerbose='0'" >> "$SCRIPTCONF"
-	echo "# How many steps between cycles in cycle command"
+	echo "hueVerbose='0'" >> "$SCRIPTCONF" >> "$SCRIPTCONF"
+	echo "# How many steps between cycles in cycle command" >> "$SCRIPTCONF"
 	echo "hueCycleStep='500'" >> "$SCRIPTCONF"  
-	echo "# Time is seconds to delay when cycling"
+	echo "# Time is seconds to delay when cycling" >> "$SCRIPTCONF"
 	echo "hueCycleDelay='1'" >> "$SCRIPTCONF"
 	echo "# Transition time for actions - in 100mSec. overrides default 400mSec" >> "$SCRIPTCONF"
 	echo "Ttime='1'" >> "$SCRIPTCONF"
-	echo "# Amount of time in seconds to wait for Hue Bridge to respond to commands"
+	echo "# Amount of time in seconds to wait for Hue Bridge to respond to commands" >> "$SCRIPTCONF"
         echo "hueTimeOut='7'" >> "$SCRIPTCONF"
         echo "# ApiHash is required. " >> "$SCRIPTCONF"
         echo "# If this field is empty, create an account and get and api key from: " >> "$SCRIPTCONF"
@@ -1468,11 +1469,22 @@ install_hue() {
 		exit 1
 	fi
 
-	printf "Would you also like to download a small collection of example scripts that use huetil (Y/N)? "
+	printf "\\nHere is the huetil.conf file:\\n\\n"
+	cat $SCRIPTCONF
+	sleep 3
+
+	printf "\\n\\nWould you also like to download a small collection of example scripts that use huetil (Y/N)? "
 	read a
 	if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
-		printf "This will download some scripts into the $SCRIPTDIR/examples directory"
+		printf "\\nThis will download some scripts into the $SCRIPTDIR/examples directory"
 		getexamples
+	fi
+	printf "\\n Install Complete\\n"
+	printf "Would you like huetil to scan and display the lights,groups and scenes on the Hue Bridge (Y/N)? "
+	read a
+	if [ "$a" = "y" ] || [ "$a" = "Y" ]; then
+		checkapi
+		showhuestuff all
 	fi
 
 }
