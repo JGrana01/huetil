@@ -7,7 +7,7 @@
 # Author: John Grana jgranaroc@gmail.com
 #   a rewite of a scripts based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.12
+# version : v1.2.14
 # date    : 1/7/2024
 #
 # inplemented features:
@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.11"
+SCRIPTVER="1.2.14"
 HUERESPONSE="/tmp/hueresponse"
 HUEHASH="/tmp/huetil.hash"
 cleanuphue() {
@@ -162,7 +162,7 @@ usage() {
 	echo "scene				:  huetil scene scenename group"
 	echo ""	
 	echo "save light/group settings  	:  huetil save <light|group|all> n {filename}"
-	echo "restore light settings     	:  huetil restore <light> n {filename}"
+	echo "restore light/group settings     	:  huetil restore <light|group> n {filename}"
 	echo "show lights/groups/scenes		:  huetil show <lights|groups|scenes|all>"
 	echo "colors - list colors		:  huetil colors"
 	echo "convert - color to xy		:  huetil convert <color>"
@@ -279,7 +279,7 @@ local jsontmp=/tmp/jsontmp
 
 	if [ "$1" = "show" ]; then
 		cat $jsontmp >> $pprinttmp
-                cat $pprinttmp | column -ts $'\t' > $jsontmp
+                cat $pprinttmp | column -t\t > $jsontmp
                 len=$(cat $jsontmp | wc -L )
                 i=0
                 lonlin=""
@@ -314,7 +314,7 @@ local jsontmp=/tmp/jsontmp
 
 	if [ "$1" = "show" ]; then
 		cat $jsontmp >> $pprinttmp
-		cat $pprinttmp | column -ts $'\t' > $jsontmp
+		cat $pprinttmp | column -t\t > $jsontmp
 		len=$(cat $jsontmp | wc -L )
 		i=0
 		lonlin=""
@@ -338,7 +338,7 @@ local jsontmp=/tmp/jsontmp
 
 	checkscenes
 	if [ $(cat $SCRIPTDIR/scenes| wc -l ) -gt 1 ]; then
-		jq -c '.[] | .name,.group,.lights' "$SCRIPTDIR/scenes.json" > $jsontmp
+		jq -c '.[] | .name,.group,.lights' "$SCRIPTDIR/scenes.json" | sed 's/ /_/g' > $jsontmp
 		echo "Scene	GroupID	Lights" > $pprinttmp
 		while read -r line1 && scene="$line1"; do
 			read line2 && group=$line2
@@ -347,7 +347,7 @@ local jsontmp=/tmp/jsontmp
 				printf "%s\t%s\t%s\\n" "$scene" "$group" "$lights" >> $pprinttmp
 		fi
 		done < $jsontmp
-		sed 's/"//g' $pprinttmp | column -ts $'\t' > $jsontmp
+		sed 's/"//g' $pprinttmp | column -t\t > $jsontmp
 		len=$(cat $jsontmp | wc -L )
 		i=0
 		lonlin=""
@@ -1173,6 +1173,17 @@ fi
 	fi
 }
 
+# get a mac address from ethernet
+
+getmac() {
+
+	if [ "$OS" = "merlin" ]; then
+		ifconfig | grep -m 1 HWaddr | awk '{print $5}' | tr -d :
+	else
+		ifconfig | grep -m 1 ether | awk '{print $2}' | tr -d :
+	fi
+}
+
 # gethue_user - get a hue bridge username
 #       reqires user to press the link button on top of the hue
 #       very experimental - might not work in all cases.
@@ -1190,7 +1201,8 @@ gethue_user() {
 
 	hueBaseUrl="http://${hueBridge}:${huePort}"
 	hueUrl="${hueBaseUrl}/api" 
-	hueJsonData='{"devicetype":"huetil#admin"}'
+	hashmac="$(getmac)"
+	hueJsonData='{"devicetype":"huetil#'$hashmac'"}'
 
 	cat <<EOF
 
@@ -1411,7 +1423,8 @@ install_hue() {
 	if [ "$OS" = "merlin" ]; then
 		hubip=$(arp -n | grep "00:17:88" | grep -oP '(?<=[(])[^)]*')
 	else
-		hubip=$(sudo arp-scan -l --retry 4 --bandwidth 64K --ouifile=/usr/share/arp-scan/ieee-oui.txt --macfile=/usr/share/arp-scan/mac-vendor.txt | \
+		echo "This might take a little while..."
+		hubip=$(sudo arp-scan -l --retry 4 --bandwidth 64K --ouifile=/usr/share/arp-scan/ieee-oui.txt --macfile=/etc/arp-scan/mac-vendor.txt | \
         grep "Philips Lighting" | awk '{print $1}')
 	fi
 	echo "done."
