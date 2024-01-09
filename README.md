@@ -21,9 +21,12 @@ For Asuswrt-Merlin based routers, it requires Entware to be installed.
 
 huetil can turn lights/groups off and on, change colors, brightness, hue etc. It also supports turning on "scenes" that are setup for light groups.
 It can be useful for creating more dynamic "scenes" using shell scripts.
+huetil can also be used to look at information about lights and groups - their state (off/on), name/ID and their present characteristics like Brightness, color mode,
+color temperature, X:Y values, Saturation, etc.
 
 huetil attempts to support the Asuswrt-Merlin "AddOn" philosophy. It has an install and uninstall function and puts the executable script in /jffs/scripts (with a
 symbolic link to /opt/bin) and install a "conf" file in /jffs/addons/mhue.
+For Linux/Raspbian installations, the executable script will be installed in /usr/local/sbin and the conf file in the $HOME/.config/huetil directory
 
 During install, huetil can download a small group of example scripts using huetil. If selected, these will be downloaded to the ~huetil/examples directory.
 Some show how to create dynamic scenes/sequences and a few are more directed to Asuswrt-Merlin based routers. One, hueshowspeed, will take the latest download speed from a spdMerlin run
@@ -53,22 +56,36 @@ An example of a fully populated huetil.conf file looks like this:
 
 ```
 # huetil settings
+# IP Address of hue bridge
 hueBridge='192.168.1.40'
+# IP Port number of bridge - usually 80
 huePort='80'
-hueVerbose='1'
+# Print all messages (1) or just errors (0)
+hueVerbose='0'
+# How many steps between cycles in cycle command
+hueCycleStep='500'
+# Time is seconds to delay when cycling
+hueCycleDelay='1'
+# Transition time for actions - in 100mSec. overrides default 400mSec
+Ttime='1'
+# Amount of time in seconds to wait for Hue Bridge to respond to commands
+hueTimeOut='7'
 # ApiHash is required.
-# If this field is empty, create an account an get and api key from:
+# If this field is empty, create an account and get and api key from:
 #    https://developers.meethue.com/login/
 # then insert the key below
-hueTimeOut='5'
-hueApiHash="akksfke9rfondfkioifjdf;k"
+#hueApiHash generated during install - shouldn't have to change!
+hueApiHash="xmI9MUeGTgsISh8qMAsj3Xqa-kZeqrg1Y"
+
 ```
+After setting up the config file, install will ask of you want it to setup and download a small collection of example scripts that use huetil.
+If you press "Y", install will create an examples directory and download the scripts there.
+
 A good way to test the install and configuration is to issue a command to show all the lights, groups and scenes supported by the hub:
 
 **$ huetil show all**
 
-After setting up the config file, install will ask of you want it to setup and download a small collection of example scripts that use huetil.
-If you press "Y", install will create an examples directory and download the scripts there.
+Install will offer to do this after a successful installation.
 
 ## Usage
 huetil supports numerous commands along with command arguments. Here is the present list:
