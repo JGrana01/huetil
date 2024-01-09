@@ -25,6 +25,12 @@ It can be useful for creating more dynamic "scenes" using shell scripts.
 huetil attempts to support the Asuswrt-Merlin "AddOn" philosophy. It has an install and uninstall function and puts the executable script in /jffs/scripts (with a
 symbolic link to /opt/bin) and install a "conf" file in /jffs/addons/mhue.
 
+During install, huetil can download a small group of example scripts using huetil. If selected, these will be downloaded to the ~huetil/examples directory.
+Some show how to create dynamic scenes/sequences and a few are more directed to Asuswrt-Merlin based routers. One, hueshowspeed, will take the latest download speed from a spdMerlin run
+and set the color of a light based on Low (red), medium (yellow) or good (green).
+The other script, hueshowload can be run on both an Asuswrt-Merlin router or Linux box. It will change the color of a light to green (load average ok), yellow (getting busy) and red (CPU's are quite busy!
+
+
 ## Installation Process
 
 When huetil installs, it checks/downloads apps it needs (jq, column), sets up the configuration directory with a config file (huetil.conf).
@@ -345,10 +351,10 @@ _Info_ will display the present state (off or on) and information relating to co
 With the argument _bridge_ it will display the full configuration informaion from the Hue Bridge. It is displayed in json format and piped through more (there is lots of detail).
 
 i.e.
-_info light Living_Room_1_
+_info light 18
 
 ```
-light 5 (Living) is off. Brightness: 254  X: 0.4583 Y: 0.4099  Hue: 8381  Saturation: 141
+Light 18 (Island Light 1) is on. Brightness: 254  X: 0.4583 Y: 0.4099  Hue: 8381  Saturation: 141
      Color Temp: 366  Color Mode: xy
 ```
 
