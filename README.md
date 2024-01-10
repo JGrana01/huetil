@@ -2,7 +2,7 @@
 Linux based script to provide tools to manage a Hue Bridge and it's devices
 
 ## Installation
-huetil can be installed on GNU/Linux and Asuswrt-Merlin routers.
+huetil can be installed on Debian/Linux systems (i.e. Raspberry Pi) and Asuswrt-Merlin routers.
 
 Using ssh/shell, execute the following line:
 
@@ -10,7 +10,7 @@ For Asuswrt-Merlin based routers:
 
 /usr/sbin/curl --retry 3 "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil" -o "/jffs/scripts/huetil" && chmod 0755 /jffs/scripts/huetil && /jffs/scripts/huetil install
 
-For GNU/Linux (i.e. Raspberry Pi)
+For Linux (i.e. Raspberry Pi)
 
 /usr/bin/curl --retry 3 "https://raw.githubusercontent.com/JGrana01/huetil/master/huetil" -o "$HOME/huetil" && chmod 0755 $HOME/huetil && $HOME/huetil install
 
@@ -25,7 +25,8 @@ huetil can also be used to look at information about lights and groups - their s
 color temperature, X:Y values, Saturation, etc.
 
 huetil attempts to support the Asuswrt-Merlin "AddOn" philosophy. It has an install and uninstall function and puts the executable script in /jffs/scripts (with a
-symbolic link to /opt/bin) and install a "conf" file in /jffs/addons/mhue.
+symbolic link to /opt/bin) and install a "conf" file in /jffs/addons/huetil.
+
 For Linux/Raspbian installations, the executable script will be installed in /usr/local/sbin and the conf file in the $HOME/.config/huetil directory
 
 During install, huetil can download a small group of example scripts using huetil. If selected, these will be downloaded to the ~huetil/examples directory.
@@ -33,16 +34,21 @@ Some show how to create dynamic scenes/sequences and a few are more directed to 
 and set the color of a light based on Low (red), medium (yellow) or good (green).
 The other script, hueshowload can be run on both an Asuswrt-Merlin router or Linux box. It will change the color of a light to green (load average ok), yellow (getting busy) and red (CPU's are quite busy!
 
-
 ## Installation Process
 
 When huetil installs, it checks/downloads apps it needs (jq, column), sets up the configuration directory with a config file (huetil.conf).
-It then attempts to get the Philips Hue Hub IP address and if successful, set's that in the .conf file.
+It then attempts to get the Philips Hue Hub IP address and if successful, set's that in the .conf file. With Linux/Raspberry Pi, huetil uses
+the arp-scan program. If it is not installed on the system, huetil will install it.
+
 If it can't determine the IP address of the hue bridge, the user will need to find it and put the information in ~huetil/huetil.con
 
-Before huetil can issue commands to the Hue Bridge, it requires and authenticated username (aka hash). huetil install will ask the user if it wants to
+Before huetil can issue commands to the Hue Bridge, it requires and authenticated username API token (aka hash). huetil install will ask the user if it wants to
 attempt to get one from the bridge.
-This requires the user to first press the round "link" button on the top of the Hue Bridge, then press Enter when prompted by install.
+huetil follows the Philips recommended username notation of "program name#uniqueid". huetil is the "program name" and the uniqid is the MAC address (without :'s) of eth0.
+
+To begin the token generation, it requires the user to first press the round "link" button on the top of the Hue Bridge, then press Enter when prompted by install.
+You will have approx. 20-30 seconds between the Hue Bridge button press and then pressing Enter.
+
 If successful, it populates the ApiHash (username) in huetil.conf. huetil is now ready for use.
 If the user decides to do this later or it fails, they can attempt it again with huetil by executing:
 
@@ -171,6 +177,9 @@ You could also change the color, hue, brightness, etc. of the light:
 **$ huetil set light Living_Room_2 on red bri 200**
 
 This command turns the light on and changes it's color to red and sets the brightness to level 200.
+
+Note the use of the lights "Name" rather than the ID. When using a name for a light or group you will need to put an underscore (_) in place of any spaces in the name.
+(i.e. Living room would be entered as Living_room)
 
 BTW, for a list of valid colors, issue this command:
 
@@ -324,7 +333,7 @@ You can also save the state of one light or group:
 
 **huetil save (light|group) (ID or name)**
 
-This will save the present settings of the light or group. Without the optional _filename_ argument it will save the settings in the ~huetil/saved_ directory (and overwrite the file in ~huetil/saved).
+This will save the present settings of the light or group. Without the optional _filename_ argument it will save the settings in the _~huetil/saved_ directory (and overwrite the file in ~huetil/saved).
 
 You can also save the settings to a differnt file by adding a _filename_ to the end of the save command:
 
@@ -363,16 +372,31 @@ _show bridge_
 
 ### **info (light or group) (ID or name) {bridge}**
 
-_Info_ will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group.
+_Info light_ will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group. It will also show the lights product id,
+model number, maximum lumens and sw version.
+
+_Info group will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group. It will also show the lights that are
+associated with the group.
 
 With the argument _bridge_ it will display the full configuration informaion from the Hue Bridge. It is displayed in json format and piped through more (there is lots of detail).
 
 i.e.
-_info light 18
+_info light 18_
 
 ```
-Light 18 (Island Light 1) is on. Brightness: 254  X: 0.4583 Y: 0.4099  Hue: 8381  Saturation: 141
-     Color Temp: 366  Color Mode: xy
+Light 18 (Island Light 1) is on. Brightness: 254  X: 0.4584 Y: 0.4099  Hue: 8377  Saturation: 141
+                      Color Temp: 366  Color Mode: xy
+
+Product ID: Philips-LCA009-1-A21ECLv1  Model: LCA009  Max Lumens: 1680  SW Version: 1.104.2
+```
+
+_info group 2_
+
+```
+Group 2 (Living room) is off. Brightness: 70  X: 0.2322 Y: 0.1272  Hue: 48628  Saturation: 206
+                      Color Temp: 153  Color Mode: xy
+
+Lights in Group Living_room:  Play_gradient_tube (10), Living_Room_1 (5), Living_Room_3 (7), Living_Room_2 (6), Living_Room_4 (8), Living_Room_Shelf (2)
 ```
 
 ### **getcolor (light) (ID or name)**
