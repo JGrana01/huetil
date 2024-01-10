@@ -88,11 +88,10 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.15"
-HUERESPONSE="/tmp/hueresponse"
+SCRIPTVER="1.2.16"
 HUEHASH="/tmp/huetil.hash"
+
 cleanuphue() {
-	rm -f $HUERESPONSE
 	rm -f $HUEHASH
 	rm -f /tmp/pprinttmp
 	rm -f /tmp/jsontmp
@@ -118,6 +117,8 @@ else
 	SCRIPTCONF="$SCRIPTDIR/huetil.conf"
 	CURLAP="/usr/bin/curl"
 fi
+
+HUERESPONSE="$SCRIPTDIR/hueresponse"
 
 Xval=0
 Yval=0
@@ -873,16 +874,29 @@ fi
 		else
 			ison="off"
 		fi
-		printf "%s %s (%s) is %s. Brightness: %s  X: %s Y: %s  Hue: %s  Saturation: %s\\n     Color Temp: %s  Color Mode: %s\\n" $htype $hueTypeNumber "$hname" $ison $hbri $X $Y $hhue $hsat $hct $cmode
+		prodid=$(pullarg $HUERESPONSE "productid")
+		modelid=$(pullarg $HUERESPONSE "modelid")
+		swversion=$(pullarg $HUERESPONSE "swversion")
+		maxlumen=$(pullarg $HUERESPONSE "maxlumen")
+
+		printf "\\n%s %s (%s) is %s. Brightness: %s  X: %s Y: %s  Hue: %s  Saturation: %s\\n" $htype $hueTypeNumber "$hname" $ison $hbri $X $Y $hhue $hsat
+		printf "                      Color Temp: %s  Color Mode: %s\\n" $hct $cmode
 
 		if [ "$hueType" = "group" ]; then
-			printf "Lights in Group $hname: "
+			hname="$(jq -r '.name' $HUERESPONSE | sed 's/ /_/g')"
+			printf "\\nLights in Group $hname: "
 			for i in $(grep -w "$hname\s" "$SCRIPTDIR/groups" | awk '{print $3}' | tr -d '\[' | tr -d '\]' | sed 's/,/ /g')
 			do
 				lit=$(num2name light $i)
 				printf " $lit ($i),"
 			done
-			printf "\\b \\n"
+			printf "\\b \\n\\n"
+		else
+			productid=$(pullarg $HUERESPONSE "productid")
+			modelid=$(pullarg $HUERESPONSE "modelid")
+			swversion=$(pullarg $HUERESPONSE "swversion")
+			maxlumen=$(pullarg $HUERESPONSE "maxlumen")
+			printf "\\nProduct ID: %s  Model: %s  Max Lumens: %s  SW Version: %s\\n\\n" $productid $modelid $maxlumen $swversion
 		fi
 			
 	fi
@@ -1202,6 +1216,7 @@ gethue_user() {
 	hueBaseUrl="http://${hueBridge}:${huePort}"
 	hueUrl="${hueBaseUrl}/api" 
 	hashmac="$(getmac)"
+	hueUname="huetil#$hashmac"
 	hueJsonData='{"devicetype":"huetil#'$hashmac'"}'
 
 	cat <<EOF
@@ -1246,22 +1261,19 @@ EOF
 		else
 
 			huekey=$(cat $HUEHASH | awk 'BEGIN { FS = "\"" } ; {print $6};')
-			echo "Success hue username key is $huekey"
+			echo "Success hue token key is $huekey"
+			echo "hue username is $hueUname"
 			echo
 			sleep 2
+			sed -i '/hueUname/d' $SCRIPTCONF
 			sed -i '/hueApiHash/d' $SCRIPTCONF
 			echo "#hueApiHash generated during install - shouldn't have to change!" >> $SCRIPTCONF
+			echo "hueUname=\"$hueUname\"" >> $SCRIPTCONF
 			echo "hueApiHash=\"$huekey\"" >> $SCRIPTCONF
 			echo
-			echo "Updated $SCRIPTCONF:"
+			echo "Updated $SCRIPTCONF"
 			echo
 			sleep 2
-			echo "Here is the present huetil.conf file:"
-			echo
-			cat $SCRIPTCONF
-			echo
-			sleep 2
-			echo "Install done."
 
 		fi
 	else
@@ -1495,6 +1507,7 @@ remove_hue() {
 	printf "\\n Uninstall huetil and it's data/directories? [Y=Yes] ";read -r continue
 	case "$continue" in
 		Y|y) printf "\\n Uninstalling...\\n"
+		   hueUname=$(grep hueUname $SCRIPTCONF | sed 's/hueUname=//g')
 		   rm -rf "$SCRIPTDIR"
 		   if [ "$OS" = "merlin" ]; then
                    	rm -f /jffs/scripts/huetil
@@ -1503,10 +1516,16 @@ remove_hue() {
 		   	fi
 		   else
                    	rm -rf "$SCRIPTCONF"
+			rm -f $HOME/huetil
                    	sudo rm -f "$SCRIPTLOC/$SCRIPTNAME"
 		   fi
 
 		   printf "\\nhuetil uninstalled\\n"
+		   printf "The application is still enabled on the Hue Bridge\\n"
+		   printf "Philips only allows the user, via web, to remove the application ID on the bridge\\n"
+		   printf "To do this, login to your Philips Hue web portal (https://account.meethue.com) and go to\\n"
+		   printf "My Philips Hue system and then select your bridge.\\n"
+	           printf "\\n    Look for an application named $hueUname and click Remove app \\n\\n"
 		;;
 		*) printf "\\nhuetil NOT uninstalled\\n"
 		;;
