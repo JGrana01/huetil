@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.16"
+SCRIPTVER="1.2.18"
 HUEHASH="/tmp/huetil.hash"
 
 cleanuphue() {
@@ -852,7 +852,13 @@ fi
 	fi
 
 	if [ "${hueCmnd}" = "color" ]; then
-		printf "X=$X  Y=$Y\\n" 
+		printf "X=$X  Y=$Y  " 
+		x="$X"
+		y="$Y"
+		xy2rgb
+		rgb2hex
+		prtrgb
+		echo
 	elif [ "${hueCmnd}" = "info" ]; then
 		hname="$(jq -r '.name' $HUERESPONSE)"
 		hbri=$(pullarg $HUERESPONSE "bri")
@@ -879,8 +885,8 @@ fi
 		swversion=$(pullarg $HUERESPONSE "swversion")
 		maxlumen=$(pullarg $HUERESPONSE "maxlumen")
 
-		printf "\\n%s %s (%s) is %s. Brightness: %s  X: %s Y: %s  Hue: %s  Saturation: %s\\n" $htype $hueTypeNumber "$hname" $ison $hbri $X $Y $hhue $hsat
-		printf "                      Color Temp: %s  Color Mode: %s\\n" $hct $cmode
+		printf "\\n%s %s (%s) is %s. Brightness: %s  Hue: %s  Saturation: %s\\n" $htype $hueTypeNumber "$hname" $ison $hbri $hhue $hsat
+		printf "                      Color Temp: %s  Color Mode: %s  X: %s Y: %s\\n" $hct $cmode $X $Y
 
 		if [ "$hueType" = "group" ]; then
 			hname="$(jq -r '.name' $HUERESPONSE | sed 's/ /_/g')"
@@ -892,6 +898,13 @@ fi
 			done
 			printf "\\b \\n\\n"
 		else
+			x="$X"
+			y="$Y"
+			printf "                      RGB: "
+			xy2rgb
+			rgb2hex
+			prtrgb
+			echo
 			productid=$(pullarg $HUERESPONSE "productid")
 			modelid=$(pullarg $HUERESPONSE "modelid")
 			swversion=$(pullarg $HUERESPONSE "swversion")
@@ -1183,9 +1196,73 @@ fi
 			Xval=$(echo "$COLOR" | awk '{print $2}')
 			Yval=$(echo "$COLOR" | awk '{print $4}')
 	else
+		x=$(echo "$COLOR" | awk '{print $2}')
+		y=$(echo "$COLOR" | awk '{print $4}')
 		echo "$COLOR" | sed 's/-x //' | sed 's/-y //'
+		xy2rgb
+		echo
+		
 	fi
 }
+
+makeRGB() {
+
+	if [ $(echo "$1 > 1" | bc -l) -eq 1 ]; then
+    		echo 255
+	elif [ $(echo "$1 < 0" | bc -l) -eq 1 ]; then
+    		echo 0
+	else
+    		printf "%.0f" $(echo "$1 * 255" | bc -l)
+	fi
+
+}
+
+rgb2hex() {
+    printf " Hex: #%02X%02X%02X " $r $g $b
+}
+
+prtrgb() {
+	printf " ANSI Color: \033[48;2;$r;$g;$b;4m           \e[0m"
+}
+xy2rgb() {
+
+# init
+#x="$1"
+#y="$2"
+#Y=$3
+Y=1
+
+z=$(echo "1.0 - $x - $y" | bc -l)
+
+X=$(echo "$Y / $y * $x" | bc -l)
+Z=$(echo "$Y / $y * $z" | bc -l)
+
+# Wide gamut D65 conversion
+r=$(echo "$X * 1.612 - $Y * 0.203 - $Z * 0.302" | bc -l)
+g=$(echo "-$X * 0.509 + $Y * 1.412 + $Z * 0.066" | bc -l)
+b=$(echo "$X * 0.026 - $Y * 0.072 + $Z * 0.962" | bc -l)
+
+
+# Apply gamma correction
+r=$(echo "if ($r <= 0.0031308) 12.92 * $r else (1.0 + 0.055) * e(l($r) / 0.417)" | bc -l)
+g=$(echo "if ($g <= 0.0031308) 12.92 * $g else (1.0 + 0.055) * e(l($g) / 0.417)" | bc -l)
+b=$(echo "if ($b <= 0.0031308) 12.92 * $b else (1.0 + 0.055) * e(l($b) / 0.417)" | bc -l)
+
+
+# now normalize
+
+r=$(makeRGB $r)
+g=$(makeRGB $g)
+b=$(makeRGB $b)
+
+
+# now print values and color
+
+printf " R: %s G: %s B: %s " $r $g $b
+#printf "\033[48;2;$r;$g;$b;4m           \e[0m\\n"
+
+}
+
 
 # get a mac address from ethernet
 
