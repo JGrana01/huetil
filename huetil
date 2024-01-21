@@ -88,7 +88,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.18"
+SCRIPTVER="1.2.19"
 HUEHASH="/tmp/huetil.hash"
 
 cleanuphue() {
@@ -142,6 +142,7 @@ usage() {
 	echo "        bri 		:  huetil set light|group n bri <0-255>"
 	echo "        hue 		:  huetil set light|group n hue <0-65535>"
 	echo "        xy		:  huetil set light|group n xy <0.0-1.0>:<0.0-1.0>"
+	echo "        rgb		:  huetil set light|group n rgb <0-255> <0-255> <0-255>"
 	echo "        ct		:  huetil set light|group n ct <153-500>"
 	echo "                                color temp can also be Cool, Daylight, Natural, Warm or Candle"
 	echo "        color		:  huetil set light|group n color <color>"
@@ -158,13 +159,13 @@ usage() {
 	echo "       sat-inc            :  huetil play light|group n sat-inc <-255-255>"
 	echo "       ct-inc             :  huetil play light|group n ct-inc <-65534-65535>"
 	echo ""
-	echo "getcolor				:  huetil getcolor light n"
+	echo "getcolor			:  huetil getcolor light n"
 	echo "info				:  huetil info {bridge}|light|group n"
 	echo "scene				:  huetil scene scenename group"
 	echo ""	
 	echo "save light/group settings  	:  huetil save <light|group|all> n {filename}"
-	echo "restore light/group settings     	:  huetil restore <light|group> n {filename}"
-	echo "show lights/groups/scenes		:  huetil show <lights|groups|scenes|all>"
+	echo "restore light/group settings	:  huetil restore <light|group> n {filename}"
+	echo "show lights/groups/scenes	:  huetil show <lights|groups|scenes|all>"
 	echo "colors - list colors		:  huetil colors"
 	echo "convert - color to xy		:  huetil convert <color>"
 	echo ""
@@ -1226,10 +1227,6 @@ prtrgb() {
 }
 xy2rgb() {
 
-# init
-#x="$1"
-#y="$2"
-#Y=$3
 Y=1
 
 z=$(echo "1.0 - $x - $y" | bc -l)
@@ -1262,6 +1259,71 @@ printf " R: %s G: %s B: %s " $r $g $b
 #printf "\033[48;2;$r;$g;$b;4m           \e[0m\\n"
 
 }
+
+
+rgb2xy() {
+
+# parameter validation
+
+if [ $r -lt 0 ] || [ $r -gt 255 ]; then
+	echo "R value $r is not in range (0-255)"
+	exit 1
+fi
+if [ $g -lt 0 ] || [ $g -gt 255 ]; then
+	echo "G value $g is not in range (0-255)"
+	exit 1
+fi
+if [ $b -lt 0 ] || [ $b -gt 255 ]; then
+	echo "B value $b is not in range (0-255)"
+	exit 1
+fi
+
+
+# normalize
+
+rgb_r=$(echo "$r / 255.0" | bc -l)
+rgb_g=$(echo "$g / 255.0" | bc -l)
+rgb_b=$(echo "$b / 255.0" | bc -l)
+
+# start conversion
+
+red=$rgb_r
+green=$rgb_g
+blue=$rgb_b
+
+# Apply gamma correction
+r=$(echo "if ($red > 0.04045)  e(l(($red + 0.055) / 1.055) / 2.4) else ($red / 12.92)" | bc -l)
+g=$(echo "if ($green > 0.04045)  e(l(($green + 0.055) / 1.055) / 2.4) else ($green / 12.92)" | bc -l)
+b=$(echo "if ($blue > 0.04045)  e(l(($blue + 0.055) / 1.055) / 2.4) else ($blue / 12.92)" | bc -l)
+
+# Wide gamut conversion D65
+X=$(echo "$r * 0.649926 + $g * 0.103455 + $b * 0.197109" | bc -l)
+Y=$(echo "$r * 0.234327 + $g * 0.743075 + $b * 0.022598" | bc -l)
+Z=$(echo "$r * 0.0000000 + $g * 0.053077 + $b * 1.035763" | bc -l)
+
+cx=$(echo "$X / ($X + $Y + $Z)" | bc -l)
+cy=$(echo "$Y / ($X + $Y + $Z)" | bc -l)
+
+# Check for NaN and set to 0.0 if needed
+if [ -z "$cx" ] || [ "$cx" != "$cx" ]; then
+  cx=0.0
+fi
+
+if [ -z "$cy" ] || [ "$cy" != "$cy" ]; then
+  cy=0.0
+fi
+
+Xval=$(printf "%.3f" $cx)
+Yval=$(printf "%.3f" $cy)
+
+if [ "$debug" = "1" ]; then
+	echo "{ x: $cx, y: $cy, bri: $Y }"
+	printf "%.3f  %.3f" $Xval $Yval
+	read a
+fi
+
+}
+
 
 
 # get a mac address from ethernet
@@ -1756,6 +1818,20 @@ fi
 		        hueSetXY $xval $yval
 			shift
 	   	;;
+		rgb)
+			r=$2
+			shift
+			g=$2
+			shift
+			b=$2
+if [ "$debug" = "1" ]; then
+			printf "r %s g %s b %s\\n" $r $g $b
+			read a
+fi
+			rgb2xy
+			hueSetXY $Xval $Yval
+			shift
+		;;
 		color)
 			hue_color convert $2
 			hueSetXY "$Xval" "$Yval"; shift
