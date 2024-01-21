@@ -104,11 +104,12 @@ huetil Version 1.2.11
  set <light|group> <ID|name> <arg value> {arg value}...
    arg can be...
        <on|off>         :  huetil set light|group n <on|off> {color}
-        sat             :  huetil set light|group n sat=<0-255>
-        bri             :  huetil set light|group n bri=<0-255>
-        hue             :  huetil set light|group n hue=<0-65535>
-        xy              :  huetil set light|group n xy=<0.0-1.0>:<0.0-1.0>
-        ct              :  huetil set light|group n ct=<153-500>
+        sat             :  huetil set light|group n sat <0-255>
+        bri             :  huetil set light|group n bri <0-255>
+        hue             :  huetil set light|group n hue <0-65535>
+        xy              :  huetil set light|group n xy <0.0-1.0>:<0.0-1.0>
+        rgb             :  huetil set light|group n rgb <0-255> <0-255> <0-255>
+        ct              :  huetil set light|group n ct <153-500>
                                 color temp can also be Cool, Daylight, Natural, Warm or Candle
         color           :  huetil set light|group n color <color>
         trans           :  huetil set light|group n trans <1-300>
@@ -278,6 +279,8 @@ _color_ - set the color to one in the Gamut C range (issue **$ huetil colors**) 
 
 _xy_ - set the color based on the CIE X and Y values. The two values need to be seperated by a colin (:) i.e. 0.312:0.423   +/-<0.0 - 1.0>
 
+_rgb_ - set the color based on RGB (Red Green Blue) values. Each R,G,B must be between 0 and 255
+
 _trans_ - The duration of the transition from the light’s current state to the new state. This is given as a multiple of 100ms and defaults to 4 (400ms).
 
 ### **play (light|group (ID or Name) (effect) _argument_**
@@ -384,8 +387,9 @@ i.e.
 _info light 18_
 
 ```
-Light 18 (Island Light 1) is on. Brightness: 254  X: 0.4584 Y: 0.4099  Hue: 8377  Saturation: 141
-                      Color Temp: 366  Color Mode: xy
+Light 18 (Island Light 1) is on. Brightness: 254  Hue: 8381  Saturation: 141
+                      Color Temp: 366  Color Mode: xy  X: 0.4583 Y: 0.4099
+                      RGB:  R: 255 G: 190 B: 11  Hex: #FFBE0B  ANSI Color:
 
 Product ID: Philips-LCA009-1-A21ECLv1  Model: LCA009  Max Lumens: 1680  SW Version: 1.104.2
 ```
@@ -407,7 +411,7 @@ i.e.
 _getcolor light 5_
 
 ```
-X=  0.4583  Y=  0.4099
+X=  0.4583  Y=  0.4099   R: 255 G: 190 B: 11  Hex: #FFBE0B  ANSI Color:
 ```
 ### **colors**
 
@@ -454,6 +458,7 @@ i.e.
 _convert violet_
 ```
 0.3644 0.2133
+ R: 255 G: 104 B: 255
 ```
 ## Notes
 
