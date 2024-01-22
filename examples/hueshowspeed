@@ -1,0 +1,90 @@
+#!/bin/sh
+
+#
+# script to show download speed of WAN interface
+#
+# Requires spdmerlin to be installed and running
+#
+#
+# once you have the numbers dialed in, you can add a cron job to monitor the speed/light
+#
+# I would add the following line to /jffs/scripts/services-start:
+#
+# cru a HueSpeed "*/10 * * * * /jffs/addons/huetil/examples/hueshowspeed"
+#
+# this will run every 10 minutes.
+#
+
+
+# edit these numbers to reflect your Internet WAN download speeds (typically)
+
+BADSPEED=15		# can't even stream...
+LOWSPEED=30		# the lowest download speed (Red)
+MEDSPEED=80		# a reasonable (but not great) (Yellow)
+GOODSPEED=175		# very good
+
+
+# set your desired light (can use huetil show lights to get it's id
+
+HUELIGHT=16		# the local Hue light bulb ID (huetil show lights)
+
+# set desired brightness level
+
+BRITE=50		# lowest brightness level
+
+
+# set hue lightbulb to a color to indicate latest download speed
+# enable by creating an empty file in /jffs/logs/huespeed
+
+sethue() {
+
+	/opt/sbin/huetil set light $HUELIGHT bri $BRITE
+	if [ $1 -gt $GOODSPEED ]; then
+		/opt/sbin/huetil set light $HUELIGHT bri $BRITE color green
+	elif [ $1 -gt $MEDSPEED ]; then
+		/opt/sbin/huetil set light $HUELIGHT bri $BRITE color goldenrod
+	else
+		/opt/sbin/huetil set light $HUELIGHT bri $BRITE color red
+
+# if below BAD threshold, blink the light for 15 seconds
+
+		if [ $1 -lt $BADSPEED ]; then
+			/opt/sbin/huetil play light $HUELIGHT breathe long
+		fi
+	fi
+}
+
+
+# main
+
+# make sure running spdMerlin
+
+if [ ! -f /jffs/scripts/spdmerlin ]; then
+	echo "hueshowspeed requires spdmerlin installed"
+	echo "You can use AMTM to install it"
+	exit
+fi
+
+# get location of csv file
+
+storeloc=$(grep STORAGE /www/user/spdmerlin/config.htm)
+
+if [ "$storeloc" = "STORAGELOCATION=usb" ]; then
+	SPDCSV=/opt/share/spdmerlin.d/lastx_WAN.csv	# location of spdmerlin csv file
+else
+	SPDCSV=/jffs/addons/spdmerlin.d/lastx_WAN.csv	# location of spdmerlin csv file
+fi
+
+
+# grab the latest results
+
+intdl=$(head -1 "$SPDCSV" | awk 'BEGIN { FS="," }; { print int($2) }')
+intul=$(head -1 "$SPDCSV" | awk 'BEGIN { FS="," }; { print int($3) }')
+
+#
+# set color of HUE lightbulb based on speed
+#
+
+sethue $intdl
+
+
