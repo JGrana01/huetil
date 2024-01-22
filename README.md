@@ -376,7 +376,8 @@ _show bridge_
 ### **info (light or group) (ID or name) {bridge}**
 
 _Info light_ will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group. It will also show the lights product id,
-model number, maximum lumens and sw version.
+model number, maximum lumens and sw version. The color "component" will show the xy values as well as 
+the calculated RGB and ANSI Hex values.
 
 _Info group will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group. It will also show the lights that are
 associated with the group.
@@ -405,7 +406,7 @@ Lights in Group Living_room:  Play_gradient_tube (10), Living_Room_1 (5), Living
 
 ### **getcolor (light) (ID or name)**
 
-The command _getcolor_ will return the x and y coordinates of a color in CIE color space of the light. This, combined with the _set xy_ command can be useful to fine tune the color of a light.
+The command _getcolor_ will return the x and y coordinates of a color in CIE color space of the light as well as the internally calculated RGB and ANSI Hex codes. This, combined with the _set xy_ or _set rgb_ command can be useful to fine tune the color of a light.
 
 i.e.
 _getcolor light 5_
