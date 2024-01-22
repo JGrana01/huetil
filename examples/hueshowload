@@ -1,0 +1,60 @@
+#!/bin/sh
+
+#
+# script to show system load average on a hue light bulb by color
+#
+# low load = Green
+# med = Yellow
+# high load = Red
+#
+# I would add the following line to /jffs/scripts/services-start:
+#
+# cru a HueLoad "*/5 * * * * /jffs/addons/huetil/examples/hueshowload"
+#
+# this will run every 5 minutes
+
+LOWLOAD=2		# the average load at least on my AX88U router (usually around 1.7)
+MEDLOAD=3		# starting to get busy
+HIGHLOAD=4		# danger, pretty loaded
+
+HUELIGHT=20		# the local Hue light bulb ID (huetil show lights)
+BRITE=30		# lowest brightness level
+
+# set hue lightbulb to a color to indicate latest load average over the past 5 mins
+# uses uptime to pull the information
+#
+# if load average is = or above HIGHLOAD, blink the red for 15 seconds
+#
+
+sethue() {
+
+	/opt/sbin/huetil set light $HUELIGHT bri $BRITE
+	if [ $1 -lt $LOWLOAD ]; then
+		/opt/sbin/huetil set light $HUELIGHT bri $2 color green
+	elif [ $1 -lt $MEDLOAD ]; then
+		/opt/sbin/huetil set light $HUELIGHT bri $2 color goldenrod
+	else
+		/opt/sbin/huetil set light $HUELIGHT bri $2 color red
+		/opt/sbin/huetil play light $HUELIGHT breathe long
+	fi
+
+}
+
+# main
+
+# grab the latest results
+
+loadavg=$(uptime | awk '{print $9}')
+
+intload=$(echo $loadavg | awk 'BEGIN { FS="." }; { print int($1) }')
+fracload=$(echo $loadavg | awk 'BEGIN { FS="." }; { print int($2) }')
+
+# set brighter than default if in the upper end of the load average range
+
+if [ "$fracload" -gt "$BRITE" ]; then
+	sethue $intload $fracload
+else
+	sethue $intload $BRITE
+fi
+
+
