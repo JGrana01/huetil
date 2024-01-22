@@ -1,0 +1,88 @@
+#!/bin/sh
+
+#
+# cyclergb - cycle through various RGB values
+#
+# while display the RGB colors of the bulb and wait ~1-2 seconds
+# if you press enter, it will pause. Entering 'q' will restore the light and exit
+#
+#
+
+# time between cycles
+
+SLDELAY=1	#  time between cycles
+INC=25		# increment each R G and B by this amount
+
+
+# workaround for Ubuntu/Linux dash shell
+# doesn't support timed read commands...
+
+if [ "$(uname -o)" = "GNU/Linux" ]; then
+	SHL="/usr/bin/bash"
+else
+	SHL="/bin/sh"
+fi
+
+checkexit() {
+         if $($SHL -c "read -r -t $SLDELAY"); then
+            	printf "\\n"
+		echo "Pause... (q to exit)"
+		read a
+		if [ "$a" = "q" ]; then
+			printf "\\nR %s G %g B %b\\n" $r $g $b
+			huetil restore light $light
+			exit
+		fi
+        fi
+}
+
+# make sure there is a light
+
+if [ $# -ne 1 ]; then
+	echo "cyclrgb needs a light arguments"
+	echo " i.e. cyclergb 2"
+	exit
+fi
+
+
+light=$1
+
+# save initial light state
+
+huetil save light $light
+
+#
+# on exits, restore the light
+#
+
+trap 'huetil restore light $light; exit' INT
+
+# get to a known brightness
+
+huetil set light $light on bri 230
+
+set initial values
+
+r=0
+g=0
+b=$INC
+
+# now cycle until Enter is pressed, Ctrl-C or done
+
+
+while [ "$r" -lt "256" ]; do
+	while [ "$g" -lt "256" ]; do
+		while [ "$b" -lt "256" ]; do
+                	huetil set light $light rgb $r $g $b
+			printf "RGB: $r $g $b   \r"
+	                checkexit $1
+			b="$((b + INC))"
+		done
+	b=0
+	g="$((g + INC))"
+done
+g=0
+r="$((r + INC))"
+done
+echo
+huetil restore light 18
