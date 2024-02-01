@@ -281,6 +281,10 @@ _xy_ - set the color based on the CIE X and Y values. The two values need to be 
 
 _rgb_ - set the color based on RGB (Red Green Blue) values. Each R,G,B must be between 0 and 255
 
+ ***Note about RGB:*** The Philips Hue API doesn't support RGB values to set a color. _huetil_ does a conversion internally from RGB to CIE XY. It also uses the present "brightness" of the device (aka bri) as part of the conversion calculation.
+ The conversion does NOT account for the fact that many (all) of the Hue bulbs do not fully support a wide color gamut. As a result, the color will be sometimes be correct, or at worse "close". 
+ The _info_ command will also now show both the XY values as well as the calculated RGB values.
+
 _trans_ - The duration of the transition from the light’s current state to the new state. This is given as a multiple of 100ms and defaults to 4 (400ms).
 
 ### **play (light|group (ID or Name) (effect) _argument_**
@@ -379,7 +383,7 @@ _Info light_ will display the present state (off or on) and information relating
 model number, maximum lumens and sw version. The color "component" will show the xy values as well as 
 the calculated RGB and ANSI Hex values.
 
-_Info group will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group. It will also show the lights that are
+_Info group_ will display the present state (off or on) and information relating to color, brightness, hue, saturation and color mode of a light or a group. It will also show the lights that are
 associated with the group.
 
 With the argument _bridge_ it will display the full configuration informaion from the Hue Bridge. It is displayed in json format and piped through more (there is lots of detail).
@@ -453,7 +457,7 @@ Available color temps (ct):
     Cool Daylight Natural Warm Candle
 ```
 ### **convert (color)**
-_Convert_ takes one of the known colors huetil supports and return the CIE X and Y values. Again, useful for fine tuning colors.
+_Convert_ takes one of the known colors huetil supports and return the CIE X and Y and the internally calculated RGB values. Again, useful for fine tuning colors.
 
 i.e.
 _convert violet_
@@ -463,11 +467,12 @@ _convert violet_
 ```
 ## Notes
 
-The **set** command always turns the light or group **on**.
+The **set** command always turns the light or group **on** if they are off.
 
-There are numerous ways to set the color of a light or group. You can set "color", hue and saturation (hue sat), xy or color temperature (ct).
+There are numerous ways to set the color of a light or group. You can set "color", hue and saturation (hue sat), xy, color temperature (ct) or RGB values.
 
 If multiple methods are used then the Hue applies a priority: xy > ct > hue saturation.
+_Note_ RGB is converted by _huetil_ to xy - it has the same priority as xy.
 
 ## There are also a set of utilty commands.
 ```
