@@ -7,7 +7,7 @@
 # Author: John Grana jgranaroc@gmail.com
 #   a rewite of a scripts based on the hue.sh by Harald van der Laan
 #    with a few other bits from open source
-# version : v1.2.15
+# version : v1.2.20
 # date    : 1/7/2024
 #
 # inplemented features:
@@ -39,6 +39,7 @@
 #		hue - set the hue to value
 #		ct - set color temperature to value
 #		xy - set color based on x and y values (x:y)
+#		rgb - set color based on RGB values
 #		color - set the color based on a color name
 #
 #	actions can be all on one line.
@@ -88,7 +89,7 @@ setOS() {
 
 
 SCRIPTNAME="huetil"
-SCRIPTVER="1.2.19"
+SCRIPTVER="1.2.20"
 HUEHASH="/tmp/huetil.hash"
 
 cleanuphue() {
@@ -167,6 +168,7 @@ usage() {
 	echo "restore light/group settings	:  huetil restore <light|group> n {filename}"
 	echo "show lights/groups/scenes	:  huetil show <lights|groups|scenes|all>"
 	echo "colors - list colors		:  huetil colors"
+	echo "showxy						:  huetil showxy light|group n"
 	echo "convert - color to xy		:  huetil convert <color>"
 	echo ""
 	echo "help (this screen)		:  huetil help"
@@ -719,6 +721,8 @@ hueattr() {
 	hueCmnd=${3}
 	hueFileName=${4}
 
+# special case for the Hue Hub
+
 	if [ "${hueTypeNumber}" = "info" ] && [ "${hueType}" = "bridge" ]; then
 		gethueconfig
 		exit
@@ -737,13 +741,13 @@ hueattr() {
 		case ${hueType} in
 			light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}/state" ;;
 			group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}/action" ;;
-			*) echo "[-] huetil: The hue device not a light."; exit 1 ;;
+			*) echo "[-] huetil: The hue type not a light or group."; exit 1 ;;
 		esac
 	else
 		case ${hueType} in
 			light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}" ;;
 			group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}" ;;
-			*) echo "[-] huetil: The hue device not a light."; exit 1 ;;
+			*) echo "[-] huetil: The hue type not a light or group."; exit 1 ;;
 		esac
 	fi
 
@@ -856,6 +860,7 @@ fi
 		printf "X=$X  Y=$Y  " 
 		x="$X"
 		y="$Y"
+		z=$(pullarg $HUERESPONSE "bri")  # set brightness to what the light/group is now
 		xy2rgb
 		rgb2hex
 		prtrgb
@@ -901,6 +906,7 @@ fi
 		else
 			x="$X"
 			y="$Y"
+			z=$(pullarg $HUERESPONSE "bri")
 			printf "                      RGB: "
 			xy2rgb
 			rgb2hex
@@ -1058,7 +1064,7 @@ fi
 			cornsilk) COLOR='-x 0.3511 -y 0.3574' ;;
 			crimson) COLOR='-x 0.6508 -y 0.2881' ;;
 			cyan) COLOR='-x 0.1607 -y 0.3423' ;;
-			d65) COLOR='-x 0.3127 -y 0.3290' ;;
+			d65) COLOR='-x 0.3138 -y 0.3310' ;;
 			dark-blue) COLOR='-x 0.153 -y 0.048' ;;
 			dark-cyan) COLOR='-x 0.1607 -y 0.3423' ;;
 			dark-goldenrod) COLOR='-x 0.5214 -y 0.4361' ;;
@@ -1089,6 +1095,8 @@ fi
 			gold) COLOR='-x 0.4871 -y 0.4618' ;;
 			goldenrod) COLOR='-x 0.5125 -y 0.4428' ;;
 			gray) COLOR='-x 0.3227 -y 0.329' ;;
+			grow-lightA) COLOR='-x 0.192 -y 0.213' ;;
+			grow-lightB) COLOR='-x 0.639 -y 0.330' ;;
 			web-gray) COLOR='-x 0.3227 -y 0.329' ;;
 			green) COLOR='-x 0.17 -y 0.7' ;;
 			web-green) COLOR='-x 0.17 -y 0.7' ;;
@@ -1199,6 +1207,7 @@ fi
 	else
 		x=$(echo "$COLOR" | awk '{print $2}')
 		y=$(echo "$COLOR" | awk '{print $4}')
+		z=254	
 		echo "$COLOR" | sed 's/-x //' | sed 's/-y //'
 		xy2rgb
 		echo
@@ -1225,14 +1234,27 @@ rgb2hex() {
 prtrgb() {
 	printf " ANSI Color: \033[48;2;$r;$g;$b;4m           \e[0m"
 }
+
+
+# xy2rgb - convert X and Y (along with the lights bri value) to RGB
+
 xy2rgb() {
 
-Y=1
+
+Y=$(echo "$z / 255.0" | bc -l)
+
+# insure x and y are within the limited gamut
+# future work for now
+
+#Red: 0.675, 0.322
+#Green: 0.4091, 0.518
+#Blue: 0.167, 0.04
 
 z=$(echo "1.0 - $x - $y" | bc -l)
 
 X=$(echo "$Y / $y * $x" | bc -l)
 Z=$(echo "$Y / $y * $z" | bc -l)
+
 
 # Wide gamut D65 conversion
 r=$(echo "$X * 1.612 - $Y * 0.203 - $Z * 0.302" | bc -l)
@@ -1241,10 +1263,15 @@ b=$(echo "$X * 0.026 - $Y * 0.072 + $Z * 0.962" | bc -l)
 
 
 # Apply gamma correction
-r=$(echo "if ($r <= 0.0031308) 12.92 * $r else (1.0 + 0.055) * e(l($r) / 0.417)" | bc -l)
-g=$(echo "if ($g <= 0.0031308) 12.92 * $g else (1.0 + 0.055) * e(l($g) / 0.417)" | bc -l)
-b=$(echo "if ($b <= 0.0031308) 12.92 * $b else (1.0 + 0.055) * e(l($b) / 0.417)" | bc -l)
+r=$(awk -v r="$r" 'BEGIN { if (r <= 0.0031308) printf "%.10f", 12.92 * r; else printf "%.10f", (1.0 + 0.055) * (r ^ (1.0 / 2.4)) - 0.055 }')
+g=$(awk -v g="$g" 'BEGIN { if (g <= 0.0031308) printf "%.10f", 12.92 * g; else printf "%.10f", (1.0 + 0.055) * (g ^ (1.0 / 2.4)) - 0.055 }')
+b=$(awk -v b="$b" 'BEGIN { if (b <= 0.0031308) printf "%.10f", 12.92 * b; else printf "%.10f", (1.0 + 0.055) * (b ^ (1.0 / 2.4)) - 0.055 }')
 
+
+if [ "$debug" = "1" ]; then
+	printf " R: %s G: %s B: %s \\n" $r $g $b
+	read a
+fi
 
 # now normalize
 
@@ -1253,10 +1280,9 @@ g=$(makeRGB $g)
 b=$(makeRGB $b)
 
 
-# now print values and color
+# now print/return values and color
 
 printf " R: %s G: %s B: %s " $r $g $b
-#printf "\033[48;2;$r;$g;$b;4m           \e[0m\\n"
 
 }
 
@@ -1281,22 +1307,27 @@ fi
 
 # normalize
 
-rgb_r=$(echo "$r / 255.0" | bc -l)
-rgb_g=$(echo "$g / 255.0" | bc -l)
-rgb_b=$(echo "$b / 255.0" | bc -l)
+red=$(echo "$r / 255.0" | bc -l)
+green=$(echo "$g / 255.0" | bc -l)
+blue=$(echo "$b / 255.0" | bc -l)
 
 # start conversion
 
-red=$rgb_r
-green=$rgb_g
-blue=$rgb_b
-
 # Apply gamma correction
-r=$(echo "if ($red > 0.04045)  e(l(($red + 0.055) / 1.055) / 2.4) else ($red / 12.92)" | bc -l)
-g=$(echo "if ($green > 0.04045)  e(l(($green + 0.055) / 1.055) / 2.4) else ($green / 12.92)" | bc -l)
-b=$(echo "if ($blue > 0.04045)  e(l(($blue + 0.055) / 1.055) / 2.4) else ($blue / 12.92)" | bc -l)
 
-# Wide gamut conversion D65
+r=$(awk -v red="$red" 'BEGIN{ if (red > 0.04045) printf "%.10f", ((red + 0.055) / 1.055)^2.4; else printf "%.10f", red / 12.92}')
+g=$(awk -v green="$green" 'BEGIN{ if (green > 0.04045) printf "%.10f", ((green + 0.055) / 1.055)^2.4; else printf "%.10f", green / 12.92}')
+b=$(awk -v blue="$blue" 'BEGIN{ if (blue > 0.04045) printf "%.10f", ((blue + 0.055) / 1.055)^2.4; else printf "%.10f", blue / 12.92}')
+
+if [ "$debug" = "1" ]; then
+	printf "r: %s  g: %s  b: %s \\n" $r $g $b
+	printf "g1: %s    g: %s\\n" $g1 $g
+	printf "b1: %s    b: %s\\n" $b1 $b
+	read a
+fi
+
+# Wide gamut D65 conversion
+
 X=$(echo "$r * 0.649926 + $g * 0.103455 + $b * 0.197109" | bc -l)
 Y=$(echo "$r * 0.234327 + $g * 0.743075 + $b * 0.022598" | bc -l)
 Z=$(echo "$r * 0.0000000 + $g * 0.053077 + $b * 1.035763" | bc -l)
@@ -1313,15 +1344,53 @@ if [ -z "$cy" ] || [ "$cy" != "$cy" ]; then
   cy=0.0
 fi
 
+brix=$(echo "$Y * 255" | bc -l)
+BriVal=$(printf "%.0f" $brix)
+
+# return calcultated XY
+
 Xval=$(printf "%.3f" $cx)
 Yval=$(printf "%.3f" $cy)
 
 if [ "$debug" = "1" ]; then
-	echo "{ x: $cx, y: $cy, bri: $Y }"
+	echo "{ x: $cx, y: $cy, bri: $Y bri: $BriVal }"
 	printf "%.3f  %.3f" $Xval $Yval
 	read a
 fi
 
+}
+
+getxy() {
+	hueType=${1}
+	hueTypeNumber=${2}
+
+	if ! echo "$hueTypeNumber" | grep -q "^[0-9]"
+	then
+		huenum=$(name2num "$hueType" "$hueTypeNumber")
+		hueTypeNumber=$huenum
+	fi
+	devexist $hueType $hueTypeNumber
+	case ${hueType} in
+		light) hueUrl="${hueBaseUrl}/lights/${hueTypeNumber}" ;;
+		group) hueUrl="${hueBaseUrl}/groups/${hueTypeNumber}" ;;
+		*) echo "[-] huetil: The hue type not a light or group."; exit 1 ;;
+	esac
+	$CURLAP --max-time ${hueTimeOut} --silent --request GET ${hueUrl} | jq -r '.' > $HUERESPONSE
+	if [ ${?} -ne 0 ]; then
+		echo "[-] huetil: Failed to send command to bridge"
+		exit 1
+	fi
+	checkhueresp
+
+	if [ "$hueType" = "group" ]; then
+		X=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '2p' | tr -d ',')
+		Y=$(cat $HUERESPONSE | jq -M '.action.xy' |  sed -n '3p' )
+	else
+		X=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '2p' | tr -d ',')
+		Y=$(cat $HUERESPONSE | jq -M '.state.xy' |  sed -n '3p' )
+	fi
+
+	printf " x: %s  y: %s \\n" $X $Y
 }
 
 
@@ -1830,6 +1899,7 @@ if [ "$debug" = "1" ]; then
 fi
 			rgb2xy
 			hueSetXY $Xval $Yval
+			hueSetBri $BriVal
 			shift
 		;;
 		color)
@@ -2142,6 +2212,10 @@ case ${hueDeviceAction} in
 			hueattr $hueDevice $hueDeviceNumber "color"
 			exit 0
 		;;
+		showxy)
+			getxy $hueDevice $hueDeviceNumber
+			exit 0
+		;;
 		save)
 			if [ "${hueDevice}" = "all" ]; then
 				hueSaveAll
@@ -2176,6 +2250,16 @@ case ${hueDeviceAction} in
 		;;
 # testmode - hidden command to expriment with differnt things
 		testmode)
+			x=.101
+			y=.324
+			z=254		# brightest we can get
+			printf "x: %s y: %s z: %s\\n" $x $y $z
+			xy2rgb
+			echo
+			rgb2xy
+			printf "X: %s   Y: %s\\n" $Xval $Yval
+			
+			
 			exit 0
 		;;
 	set)
